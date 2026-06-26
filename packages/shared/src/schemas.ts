@@ -33,8 +33,14 @@ export const MergeMemosSchema = z.object({
   title: z.string().trim().max(160).optional(),
 });
 
+export const LoginSchema = z.object({
+  username: z.string().trim().min(1).max(80),
+  password: z.string().min(1).max(512),
+});
+
 export type NotebookCreateInput = z.infer<typeof NotebookCreateSchema>;
 export type NotebookUpdateInput = z.infer<typeof NotebookUpdateSchema>;
 export type MemoCreateInput = z.infer<typeof MemoCreateSchema>;
 export type MemoUpdateInput = z.infer<typeof MemoUpdateSchema>;
 export type MergeMemosInput = z.infer<typeof MergeMemosSchema>;
+export type LoginInput = z.infer<typeof LoginSchema>;

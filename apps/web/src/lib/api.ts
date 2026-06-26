@@ -1,4 +1,4 @@
-import type { MemoDetail, MemoSummary, Notebook, TiptapDoc } from "@edgeever/shared";
+import type { AuthSession, MemoDetail, MemoSummary, Notebook, TiptapDoc } from "@edgeever/shared";
 
 type ListNotebooksResponse = {
   notebooks: Notebook[];
@@ -16,8 +16,21 @@ type NotebookResponse = {
   notebook: Notebook;
 };
 
+export class ApiRequestError extends Error {
+  status: number;
+  code?: string;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
 const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
   const response = await fetch(path, {
+    credentials: "include",
     ...init,
     headers: {
       "Content-Type": "application/json",
@@ -27,18 +40,37 @@ const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
 
   if (!response.ok) {
     const body = await response.json().catch(() => null);
+    const error = body && typeof body === "object" && "error" in body ? (body as { error?: { code?: string; message?: string } }).error : undefined;
     const message =
       body && typeof body === "object" && "error" in body
-        ? (body as { error?: { message?: string } }).error?.message
+        ? error?.message
         : response.statusText;
 
-    throw new Error(message || "Request failed");
+    if (response.status === 401) {
+      window.dispatchEvent(new CustomEvent("edgeever:unauthorized"));
+    }
+
+    throw new ApiRequestError(message || "Request failed", response.status, error?.code);
   }
 
   return response.json() as Promise<T>;
 };
 
 export const api = {
+  getSession: () => request<AuthSession>("/api/v1/auth/session"),
+
+  login: (payload: { username: string; password: string }) =>
+    request<AuthSession>("/api/v1/auth/login", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  logout: () =>
+    request<{ ok: true }>("/api/v1/auth/logout", {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
   listNotebooks: () => request<ListNotebooksResponse>("/api/v1/notebooks"),
 
   createNotebook: (payload: { name: string; parentId?: string | null }) =>

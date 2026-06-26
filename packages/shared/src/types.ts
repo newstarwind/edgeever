@@ -34,6 +34,18 @@ export type MemoDetail = MemoSummary & {
   mergedIntoMemoId: string | null;
 };
 
+export type AuthUser = {
+  id: string;
+  username: string;
+  displayName: string | null;
+};
+
+export type AuthSession = {
+  authRequired: boolean;
+  authenticated: boolean;
+  user: AuthUser | null;
+};
+
 export type ApiError = {
   error: {
     code: string;

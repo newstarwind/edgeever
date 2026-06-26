@@ -1,4 +1,4 @@
-import type { MemoDetail, MemoSummary, Notebook, TiptapDoc } from "@edgeever/shared";
+import type { AuthSession, AuthUser, MemoDetail, MemoSummary, Notebook, TiptapDoc } from "@edgeever/shared";
 import Placeholder from "@tiptap/extension-placeholder";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -12,6 +12,8 @@ import {
   Folder,
   Inbox,
   LayoutList,
+  LockKeyhole,
+  LogOut,
   Merge,
   MoreHorizontal,
   PanelLeft,
@@ -22,7 +24,7 @@ import {
   Tags,
   Trash2,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent } from "react";
 import { api } from "@/lib/api";
 import { localDb } from "@/lib/local-db";
 import { buildNotebookTree, cn, formatDateTime, parseTagsText, type NotebookNode } from "@/lib/utils";
@@ -31,6 +33,83 @@ import { Button } from "@/components/ui/button";
 type Pane = "notebooks" | "memos" | "editor";
 
 export const App = () => {
+  const queryClient = useQueryClient();
+  const sessionQuery = useQuery({
+    queryKey: ["auth", "session"],
+    queryFn: () => api.getSession(),
+    retry: false,
+  });
+  const loginMutation = useMutation({
+    mutationFn: api.login,
+    onSuccess: (session) => {
+      queryClient.clear();
+      queryClient.setQueryData(["auth", "session"], session);
+    },
+  });
+  const logoutMutation = useMutation({
+    mutationFn: api.logout,
+    onSuccess: () => {
+      queryClient.clear();
+      queryClient.setQueryData<AuthSession>(["auth", "session"], {
+        authRequired: true,
+        authenticated: false,
+        user: null,
+      });
+    },
+  });
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      const current = queryClient.getQueryData<AuthSession>(["auth", "session"]);
+      queryClient.clear();
+      queryClient.setQueryData<AuthSession>(["auth", "session"], {
+        authRequired: current?.authRequired ?? true,
+        authenticated: false,
+        user: null,
+      });
+    };
+
+    window.addEventListener("edgeever:unauthorized", handleUnauthorized);
+    return () => window.removeEventListener("edgeever:unauthorized", handleUnauthorized);
+  }, [queryClient]);
+
+  if (sessionQuery.isLoading) {
+    return <AuthLoadingScreen />;
+  }
+
+  const session = sessionQuery.data;
+
+  if (!session?.authenticated) {
+    return (
+      <LoginScreen
+        error={loginMutation.error instanceof Error ? loginMutation.error.message : null}
+        isSubmitting={loginMutation.isPending}
+        onSubmit={(payload) => loginMutation.mutate(payload)}
+      />
+    );
+  }
+
+  return (
+    <WorkspaceApp
+      authRequired={session.authRequired}
+      isLoggingOut={logoutMutation.isPending}
+      user={session.user}
+      onLogout={() => logoutMutation.mutate()}
+    />
+  );
+};
+
+const WorkspaceApp = ({
+  authRequired,
+  user,
+  isLoggingOut,
+  onLogout,
+}: {
+  authRequired: boolean;
+  user: AuthUser | null;
+  isLoggingOut: boolean;
+  onLogout: () => void;
+}) => {
   const queryClient = useQueryClient();
   const [activePane, setActivePane] = useState<Pane>("memos");
   const [selectedNotebookId, setSelectedNotebookId] = useState<string | null>(null);
@@ -186,6 +265,8 @@ export const App = () => {
           )}
         >
           <NotebookPane
+            authRequired={authRequired}
+            user={user}
             notebooks={notebooks}
             selectedNotebookId={selectedNotebookId}
             isLoading={notebooksQuery.isLoading}
@@ -196,6 +277,8 @@ export const App = () => {
             }}
             onCreateNotebook={handleCreateNotebook}
             onBackToList={() => setActivePane("memos")}
+            onLogout={onLogout}
+            isLoggingOut={isLoggingOut}
           />
         </aside>
 
@@ -252,6 +335,83 @@ export const App = () => {
   );
 };
 
+const AuthLoadingScreen = () => (
+  <div className="flex h-[100dvh] items-center justify-center bg-emerald-50 text-sm font-medium text-emerald-900">
+    EdgeEver
+  </div>
+);
+
+const LoginScreen = ({
+  error,
+  isSubmitting,
+  onSubmit,
+}: {
+  error: string | null;
+  isSubmitting: boolean;
+  onSubmit: (payload: { username: string; password: string }) => void;
+}) => {
+  const [username, setUsername] = useState("admin");
+  const [password, setPassword] = useState("");
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!username.trim() || !password) {
+      return;
+    }
+
+    onSubmit({ username: username.trim(), password });
+  };
+
+  return (
+    <main className="flex h-[100dvh] items-center justify-center bg-emerald-50 px-4 py-8 text-slate-950">
+      <section className="w-full max-w-[380px] rounded-md border border-emerald-100 bg-white p-5 shadow-panel">
+        <div className="mb-5 flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-md border border-emerald-200 bg-emerald-100 text-emerald-900">
+            <LockKeyhole className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-lg font-semibold leading-tight tracking-normal">登录 EdgeEver</h1>
+            <p className="mt-1 text-sm text-slate-500">自托管笔记工作区</p>
+          </div>
+        </div>
+
+        <form className="space-y-4" onSubmit={handleSubmit}>
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-medium text-slate-700">账号</span>
+            <input
+              autoComplete="username"
+              className="h-10 w-full rounded-md border border-emerald-100 bg-emerald-50/50 px-3 text-sm outline-none transition focus:border-emerald-300 focus:bg-white"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-medium text-slate-700">密码</span>
+            <input
+              autoComplete="current-password"
+              className="h-10 w-full rounded-md border border-emerald-100 bg-emerald-50/50 px-3 text-sm outline-none transition focus:border-emerald-300 focus:bg-white"
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+          </label>
+
+          {error ? (
+            <div className="rounded-md border border-rose-100 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div>
+          ) : null}
+
+          <Button className="w-full justify-center" size="md" type="submit" variant="solid" disabled={isSubmitting}>
+            <LockKeyhole className="h-4 w-4" />
+            {isSubmitting ? "登录中" : "登录"}
+          </Button>
+        </form>
+      </section>
+    </main>
+  );
+};
+
 const toggleMemoSelection = (current: Set<string>, memoId: string) => {
   const next = new Set(current);
 
@@ -265,19 +425,27 @@ const toggleMemoSelection = (current: Set<string>, memoId: string) => {
 };
 
 const NotebookPane = ({
+  authRequired,
+  user,
   notebooks,
   selectedNotebookId,
   isLoading,
   onSelect,
   onCreateNotebook,
   onBackToList,
+  onLogout,
+  isLoggingOut,
 }: {
+  authRequired: boolean;
+  user: AuthUser | null;
   notebooks: Notebook[];
   selectedNotebookId: string | null;
   isLoading: boolean;
   onSelect: (notebookId: string) => void;
   onCreateNotebook: (parentId?: string | null) => void;
   onBackToList: () => void;
+  onLogout: () => void;
+  isLoggingOut: boolean;
 }) => {
   const tree = useMemo(() => buildNotebookTree(notebooks), [notebooks]);
 
@@ -287,7 +455,7 @@ const NotebookPane = ({
         <div>
           <div className="text-base font-semibold tracking-normal lg:hidden">笔记本</div>
           <div className="hidden text-base font-semibold tracking-normal lg:block">EdgeEver</div>
-          <div className="text-xs text-slate-500">Cloudflare-native notes</div>
+          <div className="text-xs text-slate-500">{user?.username ?? "Cloudflare-native notes"}</div>
         </div>
         <div className="flex items-center gap-1">
           <Button className="lg:hidden" size="icon" variant="ghost" title="返回笔记列表" onClick={onBackToList}>
@@ -324,7 +492,7 @@ const NotebookPane = ({
       </div>
 
       <footer className="border-t border-emerald-100 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
-        <div className="grid grid-cols-3 gap-2">
+        <div className={cn("grid gap-2", authRequired ? "grid-cols-4" : "grid-cols-3")}>
           <Button size="icon" variant="ghost" title="标签">
             <Tags className="h-4 w-4" />
           </Button>
@@ -334,6 +502,11 @@ const NotebookPane = ({
           <Button size="icon" variant="ghost" title="设置">
             <MoreHorizontal className="h-4 w-4" />
           </Button>
+          {authRequired ? (
+            <Button size="icon" variant="ghost" title="退出登录" onClick={onLogout} disabled={isLoggingOut}>
+              <LogOut className="h-4 w-4" />
+            </Button>
+          ) : null}
         </div>
       </footer>
     </div>

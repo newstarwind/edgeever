@@ -68,6 +68,8 @@ const replaceTomlValue = (source, key, value) => {
   return source.replace(pattern, `$1${value}$2`);
 };
 
+const tomlString = (value) => JSON.stringify(value);
+
 const envValue = (name) => {
   const scopedName = instanceKey ? `EDGE_EVER_${instanceKey}_${name}` : undefined;
   return (scopedName ? process.env[scopedName] : undefined)?.trim()
@@ -111,6 +113,23 @@ config = replaceTomlValue(
   "preview_bucket_name",
   envValue("R2_PREVIEW_BUCKET_NAME"),
 );
+
+const runtimeVars = {
+  EDGE_EVER_AUTH_USERNAME: envValue("AUTH_USERNAME"),
+  EDGE_EVER_SESSION_TTL_DAYS: envValue("SESSION_TTL_DAYS"),
+};
+const runtimeVarLines = Object.entries(runtimeVars)
+  .filter(([, value]) => Boolean(value))
+  .map(([key, value]) => `${key} = ${tomlString(value)}`);
+
+if (runtimeVarLines.length > 0) {
+  changed = true;
+  config = `${config.trimEnd()}
+
+[vars]
+${runtimeVarLines.join("\n")}
+`;
+}
 
 const customDomain = envValue("CUSTOM_DOMAIN");
 const routePattern = envValue("ROUTE_PATTERN") || customDomain;

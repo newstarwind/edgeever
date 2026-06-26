@@ -3,6 +3,7 @@ import {
   docToMarkdown,
   docToText,
   emptyDoc,
+  LoginSchema,
   markdownToDoc,
   MemoCreateSchema,
   MemoUpdateSchema,
@@ -18,11 +19,25 @@ import {
 import { zValidator } from "@hono/zod-validator";
 import type { Context } from "hono";
 import { Hono } from "hono";
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { cors } from "hono/cors";
 
 type Bindings = {
   DB: D1Database;
   RESOURCES: R2Bucket;
+  EDGE_EVER_AUTH_USERNAME?: string;
+  EDGE_EVER_AUTH_PASSWORD_HASH?: string;
+  EDGE_EVER_SESSION_TTL_DAYS?: string;
+};
+
+type AuthContext = {
+  kind: "user" | "agent";
+  actorType: "user" | "agent";
+  actorId: string | null;
+  username: string;
+  displayName: string | null;
+  sessionId?: string;
+  tokenId?: string;
 };
 
 type NotebookRow = {
@@ -60,7 +75,40 @@ type MemoDetailRow = MemoSummaryRow & {
   content_hash: string;
 };
 
-const app = new Hono<{ Bindings: Bindings }>();
+type UserRow = {
+  id: string;
+  username: string;
+  password_hash: string;
+  display_name: string | null;
+  is_disabled: number;
+};
+
+type SessionRow = {
+  id: string;
+  user_id: string;
+  username: string;
+  display_name: string | null;
+  expires_at: string;
+};
+
+type ApiTokenRow = {
+  id: string;
+  name: string;
+  scopes_json: string;
+  expires_at: string | null;
+};
+
+type AppContext = Context<{ Bindings: Bindings; Variables: { auth: AuthContext } }>;
+
+const SESSION_COOKIE = "edgeever_session";
+const PASSWORD_HASH_ALGORITHM = "pbkdf2-sha256";
+const PASSWORD_HASH_ITERATIONS = 210_000;
+const PASSWORD_HASH_BYTES = 32;
+const PASSWORD_SALT_BYTES = 16;
+const SESSION_TOKEN_BYTES = 32;
+const DEFAULT_SESSION_TTL_DAYS = 30;
+
+const app = new Hono<{ Bindings: Bindings; Variables: { auth: AuthContext } }>();
 
 app.use(
   "/api/*",
@@ -68,6 +116,7 @@ app.use(
     origin: ["http://127.0.0.1:5173", "http://localhost:5173"],
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    credentials: true,
   })
 );
 
@@ -78,6 +127,111 @@ app.get("/api/health", (c) =>
     runtime: "cloudflare-workers",
   })
 );
+
+app.get("/api/v1/auth/session", async (c) => {
+  const authRequired = await isAuthRequired(c.env);
+
+  if (!authRequired) {
+    return c.json({
+      authRequired: false,
+      authenticated: true,
+      user: {
+        id: "local",
+        username: "owner",
+        displayName: "Owner",
+      },
+    });
+  }
+
+  const auth = await authenticateRequest(c, false);
+
+  return c.json({
+    authRequired: true,
+    authenticated: Boolean(auth && auth.kind === "user"),
+    user:
+      auth && auth.kind === "user"
+        ? {
+            id: auth.actorId,
+            username: auth.username,
+            displayName: auth.displayName,
+          }
+        : null,
+  });
+});
+
+app.post("/api/v1/auth/login", zValidator("json", LoginSchema), async (c) => {
+  const input = c.req.valid("json");
+  const user = await verifyLogin(c.env, input.username, input.password);
+
+  if (!user) {
+    return unauthorized(c, "Username or password is incorrect.");
+  }
+
+  const session = await createSession(c, user);
+  setSessionCookie(c, session.token, session.maxAge);
+
+  await c.env.DB.batch([
+    c.env.DB.prepare(`UPDATE users SET last_login_at = ?, updated_at = ? WHERE id = ?`).bind(
+      isoNow(),
+      isoNow(),
+      user.id
+    ),
+    auditStatement(c.env.DB, "user", user.id, "auth.login", "session", session.id, {
+      username: user.username,
+    }),
+  ]);
+
+  return c.json({
+    authRequired: true,
+    authenticated: true,
+    user: {
+      id: user.id,
+      username: user.username,
+      displayName: user.display_name,
+    },
+  });
+});
+
+app.post("/api/v1/auth/logout", async (c) => {
+  const token = getCookie(c, SESSION_COOKIE);
+
+  if (token) {
+    await revokeSession(c.env.DB, token);
+  }
+
+  deleteCookie(c, SESSION_COOKIE, { path: "/" });
+  return c.json({ ok: true });
+});
+
+app.use("/api/v1/*", async (c, next) => {
+  if (c.req.path.startsWith("/api/v1/auth/")) {
+    await next();
+    return;
+  }
+
+  const authRequired = await isAuthRequired(c.env);
+
+  if (!authRequired) {
+    c.set("auth", {
+      kind: "user",
+      actorType: "user",
+      actorId: null,
+      username: "owner",
+      displayName: "Owner",
+    });
+    await next();
+    return;
+  }
+
+  const auth = await authenticateRequest(c, true);
+
+  if (!auth) {
+    return unauthorized(c, "Authentication required.");
+  }
+
+  c.set("auth", auth);
+  await next();
+});
 
 app.get("/api/v1/notebooks", async (c) => {
   const rows = await c.env.DB.prepare(
@@ -92,6 +246,7 @@ app.get("/api/v1/notebooks", async (c) => {
 
 app.post("/api/v1/notebooks", zValidator("json", NotebookCreateSchema), async (c) => {
   const input = c.req.valid("json");
+  const actor = getAuditActor(c);
   const id = createId("nb");
   const now = isoNow();
 
@@ -103,7 +258,7 @@ app.post("/api/v1/notebooks", zValidator("json", NotebookCreateSchema), async (c
     .run();
 
   const notebook = await getNotebook(c.env.DB, id);
-  await audit(c.env.DB, "user", null, "notebook.create", "notebook", id, { name: input.name });
+  await audit(c.env.DB, actor.actorType, actor.actorId, "notebook.create", "notebook", id, { name: input.name });
 
   return c.json({ notebook }, 201);
 });
@@ -111,6 +266,7 @@ app.post("/api/v1/notebooks", zValidator("json", NotebookCreateSchema), async (c
 app.patch("/api/v1/notebooks/:id", zValidator("json", NotebookUpdateSchema), async (c) => {
   const id = c.req.param("id");
   const input = c.req.valid("json");
+  const actor = getAuditActor(c);
   const current = await getNotebook(c.env.DB, id);
 
   if (!current) {
@@ -130,12 +286,13 @@ app.patch("/api/v1/notebooks/:id", zValidator("json", NotebookUpdateSchema), asy
     .bind(nextName, slugify(nextName), nextParentId ?? null, nextSortOrder, now, id)
     .run();
 
-  await audit(c.env.DB, "user", null, "notebook.update", "notebook", id, input);
+  await audit(c.env.DB, actor.actorType, actor.actorId, "notebook.update", "notebook", id, input);
   return c.json({ notebook: await getNotebook(c.env.DB, id) });
 });
 
 app.delete("/api/v1/notebooks/:id", async (c) => {
   const id = c.req.param("id");
+  const actor = getAuditActor(c);
   const now = isoNow();
 
   await c.env.DB.prepare(
@@ -146,7 +303,7 @@ app.delete("/api/v1/notebooks/:id", async (c) => {
     .bind(now, now, id)
     .run();
 
-  await audit(c.env.DB, "user", null, "notebook.delete", "notebook", id, {});
+  await audit(c.env.DB, actor.actorType, actor.actorId, "notebook.delete", "notebook", id, {});
   return c.json({ ok: true });
 });
 
@@ -196,6 +353,8 @@ app.get("/api/v1/memos", async (c) => {
 
 app.post("/api/v1/memos", zValidator("json", MemoCreateSchema), async (c) => {
   const input = c.req.valid("json");
+  const actor = getAuditActor(c);
+  const actorLabel = getActorLabel(c);
   const tags = normalizeTags(input.tags);
   const contentMarkdown = input.contentMarkdown ?? "";
   const contentJson = markdownToDoc(contentMarkdown);
@@ -210,8 +369,8 @@ app.post("/api/v1/memos", zValidator("json", MemoCreateSchema), async (c) => {
     c.env.DB.prepare(
       `INSERT INTO memos (
         id, notebook_id, title, excerpt, tags_json, created_by, updated_by, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, 'user', 'user', ?, ?)`
-    ).bind(id, input.notebookId, title, excerpt, JSON.stringify(tags), now, now),
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(id, input.notebookId, title, excerpt, JSON.stringify(tags), actorLabel, actorLabel, now, now),
     c.env.DB.prepare(
       `INSERT INTO memo_contents (
         memo_id, content_json, content_markdown, content_text, content_hash, revision, created_at, updated_at
@@ -221,7 +380,9 @@ app.post("/api/v1/memos", zValidator("json", MemoCreateSchema), async (c) => {
       `INSERT INTO memos_fts (memo_id, title, content_text, tags)
        VALUES (?, ?, ?, ?)`
     ).bind(id, title, contentText, tags.join(" ")),
-    auditStatement(c.env.DB, "user", null, "memo.create", "memo", id, { notebookId: input.notebookId }),
+    auditStatement(c.env.DB, actor.actorType, actor.actorId, "memo.create", "memo", id, {
+      notebookId: input.notebookId,
+    }),
   ]);
 
   return c.json({ memo: await getMemoDetail(c.env.DB, id) }, 201);
@@ -240,6 +401,8 @@ app.get("/api/v1/memos/:id", async (c) => {
 app.patch("/api/v1/memos/:id", zValidator("json", MemoUpdateSchema), async (c) => {
   const id = c.req.param("id");
   const input = c.req.valid("json");
+  const actor = getAuditActor(c);
+  const actorLabel = getActorLabel(c);
   const current = await getMemoDetailRow(c.env.DB, id);
 
   if (!current) {
@@ -283,7 +446,7 @@ app.patch("/api/v1/memos/:id", zValidator("json", MemoUpdateSchema), async (c) =
     c.env.DB.prepare(
       `INSERT INTO memo_revisions (
         id, memo_id, revision, title, content_json, content_markdown, content_hash, created_by, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'user', ?)`
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       createId("rev"),
       id,
@@ -292,13 +455,14 @@ app.patch("/api/v1/memos/:id", zValidator("json", MemoUpdateSchema), async (c) =
       current.content_json,
       current.content_markdown,
       current.content_hash,
+      actorLabel,
       now
     ),
     c.env.DB.prepare(
       `UPDATE memos
-       SET notebook_id = ?, title = ?, excerpt = ?, tags_json = ?, updated_by = 'user', updated_at = ?
+       SET notebook_id = ?, title = ?, excerpt = ?, tags_json = ?, updated_by = ?, updated_at = ?
        WHERE id = ? AND is_deleted = 0`
-    ).bind(notebookId, title, excerpt, JSON.stringify(tags), now, id),
+    ).bind(notebookId, title, excerpt, JSON.stringify(tags), actorLabel, now, id),
     c.env.DB.prepare(
       `UPDATE memo_contents
        SET content_json = ?, content_markdown = ?, content_text = ?, content_hash = ?,
@@ -310,7 +474,9 @@ app.patch("/api/v1/memos/:id", zValidator("json", MemoUpdateSchema), async (c) =
       `INSERT INTO memos_fts (memo_id, title, content_text, tags)
        VALUES (?, ?, ?, ?)`
     ).bind(id, title, contentText, tags.join(" ")),
-    auditStatement(c.env.DB, "user", null, "memo.update", "memo", id, { revision: nextRevision }),
+    auditStatement(c.env.DB, actor.actorType, actor.actorId, "memo.update", "memo", id, {
+      revision: nextRevision,
+    }),
   ]);
 
   return c.json({ memo: await getMemoDetail(c.env.DB, id) });
@@ -318,6 +484,7 @@ app.patch("/api/v1/memos/:id", zValidator("json", MemoUpdateSchema), async (c) =
 
 app.delete("/api/v1/memos/:id", async (c) => {
   const id = c.req.param("id");
+  const actor = getAuditActor(c);
   const now = isoNow();
 
   await c.env.DB.batch([
@@ -326,7 +493,7 @@ app.delete("/api/v1/memos/:id", async (c) => {
        SET is_deleted = 1, deleted_at = ?, updated_at = ?
        WHERE id = ? AND is_deleted = 0`
     ).bind(now, now, id),
-    auditStatement(c.env.DB, "user", null, "memo.delete", "memo", id, {}),
+    auditStatement(c.env.DB, actor.actorType, actor.actorId, "memo.delete", "memo", id, {}),
   ]);
 
   return c.json({ ok: true });
@@ -334,6 +501,8 @@ app.delete("/api/v1/memos/:id", async (c) => {
 
 app.post("/api/v1/memos/merge", zValidator("json", MergeMemosSchema), async (c) => {
   const input = c.req.valid("json");
+  const actor = getAuditActor(c);
+  const actorLabel = getActorLabel(c);
   const uniqueMemoIds = Array.from(new Set(input.memoIds));
   const placeholders = uniqueMemoIds.map(() => "?").join(", ");
   const rows = await c.env.DB.prepare(
@@ -379,7 +548,7 @@ app.post("/api/v1/memos/merge", zValidator("json", MergeMemosSchema), async (c) 
       `INSERT INTO memos (
         id, notebook_id, title, excerpt, tags_json, source_memo_ids, merge_source_count,
         created_by, updated_by, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'user', 'user', ?, ?)`
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       newMemoId,
       notebookId,
@@ -388,6 +557,8 @@ app.post("/api/v1/memos/merge", zValidator("json", MergeMemosSchema), async (c) 
       JSON.stringify(tags),
       JSON.stringify(uniqueMemoIds),
       uniqueMemoIds.length,
+      actorLabel,
+      actorLabel,
       now,
       now
     ),
@@ -412,7 +583,7 @@ app.post("/api/v1/memos/merge", zValidator("json", MergeMemosSchema), async (c) 
            updated_at = ?
        WHERE memo_id IN (${placeholders})`
     ).bind(newMemoId, now, ...uniqueMemoIds),
-    auditStatement(c.env.DB, "user", null, "memo.merge", "memo", newMemoId, {
+    auditStatement(c.env.DB, actor.actorType, actor.actorId, "memo.merge", "memo", newMemoId, {
       sourceMemoIds: uniqueMemoIds,
     }),
   ]);
@@ -442,6 +613,312 @@ app.notFound((c) =>
 );
 
 export default app;
+
+const isAuthRequired = async (env: Bindings) => {
+  if (env.EDGE_EVER_AUTH_PASSWORD_HASH?.trim()) {
+    return true;
+  }
+
+  const user = await env.DB.prepare(`SELECT id FROM users WHERE is_disabled = 0 LIMIT 1`).first<{ id: string }>();
+  return Boolean(user);
+};
+
+const verifyLogin = async (env: Bindings, username: string, password: string): Promise<UserRow | null> => {
+  const normalizedUsername = username.trim();
+  const existingUser = await getUserByUsername(env.DB, normalizedUsername);
+
+  if (existingUser) {
+    return (await verifyPassword(password, existingUser.password_hash)) ? existingUser : null;
+  }
+
+  const configuredHash = env.EDGE_EVER_AUTH_PASSWORD_HASH?.trim();
+
+  if (!configuredHash) {
+    return null;
+  }
+
+  const configuredUsername = env.EDGE_EVER_AUTH_USERNAME?.trim() || "admin";
+
+  if (normalizedUsername !== configuredUsername || !(await verifyPassword(password, configuredHash))) {
+    return null;
+  }
+
+  const now = isoNow();
+  const userId = createId("usr");
+  const passwordHash = await hashPassword(password);
+
+  await env.DB.prepare(
+    `INSERT OR IGNORE INTO users (id, username, password_hash, display_name, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  )
+    .bind(userId, normalizedUsername, passwordHash, normalizedUsername, now, now)
+    .run();
+
+  return getUserByUsername(env.DB, normalizedUsername);
+};
+
+const getUserByUsername = async (db: D1Database, username: string) =>
+  db
+    .prepare(
+      `SELECT id, username, password_hash, display_name, is_disabled
+       FROM users
+       WHERE username = ? AND is_disabled = 0`
+    )
+    .bind(username)
+    .first<UserRow>();
+
+const createSession = async (c: AppContext, user: UserRow) => {
+  const token = randomToken(SESSION_TOKEN_BYTES);
+  const id = createId("sess");
+  const now = isoNow();
+  const maxAge = getSessionMaxAge(c.env);
+  const expiresAt = new Date(Date.now() + maxAge * 1000).toISOString();
+  const ip = c.req.header("CF-Connecting-IP");
+  const ipHash = ip ? await sha256(ip) : null;
+
+  await c.env.DB.prepare(
+    `INSERT INTO sessions (
+      id, user_id, token_hash, user_agent, ip_hash, expires_at, created_at, last_seen_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  )
+    .bind(
+      id,
+      user.id,
+      await sha256(token),
+      c.req.header("User-Agent") ?? null,
+      ipHash,
+      expiresAt,
+      now,
+      now
+    )
+    .run();
+
+  return { id, token, maxAge };
+};
+
+const setSessionCookie = (c: AppContext, token: string, maxAge: number) => {
+  setCookie(c, SESSION_COOKIE, token, {
+    httpOnly: true,
+    secure: new URL(c.req.url).protocol === "https:",
+    sameSite: "Lax",
+    path: "/",
+    maxAge,
+  });
+};
+
+const revokeSession = async (db: D1Database, token: string) => {
+  await db
+    .prepare(`UPDATE sessions SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL`)
+    .bind(isoNow(), await sha256(token))
+    .run();
+};
+
+const authenticateRequest = async (c: AppContext, touch: boolean): Promise<AuthContext | null> => {
+  const bearerAuth = await authenticateBearerToken(c, touch);
+
+  if (bearerAuth) {
+    return bearerAuth;
+  }
+
+  return authenticateSession(c, touch);
+};
+
+const authenticateBearerToken = async (c: AppContext, touch: boolean): Promise<AuthContext | null> => {
+  const token = getBearerToken(c);
+
+  if (!token) {
+    return null;
+  }
+
+  const row = await c.env.DB.prepare(
+    `SELECT id, name, scopes_json, expires_at
+     FROM api_tokens
+     WHERE token_hash = ?
+       AND is_revoked = 0
+       AND (expires_at IS NULL OR expires_at > ?)`
+  )
+    .bind(await sha256(token), isoNow())
+    .first<ApiTokenRow>();
+
+  if (!row) {
+    return null;
+  }
+
+  if (touch) {
+    await c.env.DB.prepare(`UPDATE api_tokens SET last_used_at = ? WHERE id = ?`).bind(isoNow(), row.id).run();
+  }
+
+  return {
+    kind: "agent",
+    actorType: "agent",
+    actorId: row.id,
+    username: row.name,
+    displayName: row.name,
+    tokenId: row.id,
+  };
+};
+
+const authenticateSession = async (c: AppContext, touch: boolean): Promise<AuthContext | null> => {
+  const token = getCookie(c, SESSION_COOKIE);
+
+  if (!token) {
+    return null;
+  }
+
+  const row = await c.env.DB.prepare(
+    `SELECT s.id, s.user_id, u.username, u.display_name, s.expires_at
+     FROM sessions s
+     INNER JOIN users u ON u.id = s.user_id
+     WHERE s.token_hash = ?
+       AND s.revoked_at IS NULL
+       AND s.expires_at > ?
+       AND u.is_disabled = 0`
+  )
+    .bind(await sha256(token), isoNow())
+    .first<SessionRow>();
+
+  if (!row) {
+    return null;
+  }
+
+  if (touch) {
+    await c.env.DB.prepare(`UPDATE sessions SET last_seen_at = ? WHERE id = ?`).bind(isoNow(), row.id).run();
+  }
+
+  return {
+    kind: "user",
+    actorType: "user",
+    actorId: row.user_id,
+    username: row.username,
+    displayName: row.display_name,
+    sessionId: row.id,
+  };
+};
+
+const getBearerToken = (c: AppContext) => {
+  const authorization = c.req.header("Authorization");
+
+  if (!authorization) {
+    return null;
+  }
+
+  const [scheme, token] = authorization.split(/\s+/, 2);
+  return scheme.toLowerCase() === "bearer" && token ? token : null;
+};
+
+const getAuditActor = (c: AppContext) => {
+  const auth = c.get("auth");
+
+  return {
+    actorType: auth?.actorType ?? "user",
+    actorId: auth?.actorId ?? null,
+  };
+};
+
+const getActorLabel = (c: AppContext) => {
+  const auth = c.get("auth");
+  return auth?.actorId ? `${auth.actorType}:${auth.actorId}` : auth?.username ?? "user";
+};
+
+const getSessionMaxAge = (env: Bindings) => {
+  const days = clampNumber(Number(env.EDGE_EVER_SESSION_TTL_DAYS ?? DEFAULT_SESSION_TTL_DAYS), 1, 90);
+  return days * 24 * 60 * 60;
+};
+
+const hashPassword = async (password: string) => {
+  const salt = crypto.getRandomValues(new Uint8Array(PASSWORD_SALT_BYTES));
+  const hash = await derivePasswordHash(password, salt, PASSWORD_HASH_ITERATIONS);
+
+  return [
+    PASSWORD_HASH_ALGORITHM,
+    PASSWORD_HASH_ITERATIONS,
+    base64UrlEncode(salt),
+    base64UrlEncode(hash),
+  ].join("$");
+};
+
+const verifyPassword = async (password: string, passwordHash: string) => {
+  const [algorithm, iterationsRaw, saltRaw, hashRaw] = passwordHash.split("$");
+  const iterations = Number(iterationsRaw);
+
+  if (
+    algorithm !== PASSWORD_HASH_ALGORITHM ||
+    !Number.isInteger(iterations) ||
+    iterations < 100_000 ||
+    !saltRaw ||
+    !hashRaw
+  ) {
+    return false;
+  }
+
+  try {
+    const expected = base64UrlDecode(hashRaw);
+    const salt = base64UrlDecode(saltRaw);
+    const actual = await derivePasswordHash(password, salt, iterations);
+
+    return timingSafeEqual(actual, expected);
+  } catch {
+    return false;
+  }
+};
+
+const derivePasswordHash = async (password: string, salt: Uint8Array, iterations: number) => {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, [
+    "deriveBits",
+  ]);
+  const saltBuffer = salt.buffer.slice(salt.byteOffset, salt.byteOffset + salt.byteLength) as ArrayBuffer;
+  const bits = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      hash: "SHA-256",
+      salt: saltBuffer,
+      iterations,
+    },
+    key,
+    PASSWORD_HASH_BYTES * 8
+  );
+
+  return new Uint8Array(bits);
+};
+
+const randomToken = (bytes: number) => {
+  const token = crypto.getRandomValues(new Uint8Array(bytes));
+  return base64UrlEncode(token);
+};
+
+const base64UrlEncode = (bytes: Uint8Array) => {
+  let binary = "";
+
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+};
+
+const base64UrlDecode = (value: string) => {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return bytes;
+};
+
+const timingSafeEqual = (left: Uint8Array, right: Uint8Array) => {
+  const length = Math.max(left.length, right.length);
+  let diff = left.length ^ right.length;
+
+  for (let index = 0; index < length; index += 1) {
+    diff |= (left[index % left.length] ?? 0) ^ (right[index % right.length] ?? 0);
+  }
+
+  return diff === 0;
+};
 
 const mapNotebook = (row: NotebookRow): Notebook => ({
   id: row.id,
@@ -601,4 +1078,15 @@ const notFound = (c: Context, message: string) =>
       },
     },
     404
+  );
+
+const unauthorized = (c: Context, message: string) =>
+  c.json(
+    {
+      error: {
+        code: "unauthorized",
+        message,
+      },
+    },
+    401
   );
