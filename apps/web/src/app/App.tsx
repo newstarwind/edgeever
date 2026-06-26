@@ -1654,7 +1654,7 @@ const DEFAULT_TOKEN_SCOPES = ["read:notebooks", "read:memos", "read:tags"];
 
 const SettingsDialog = ({ onClose }: { onClose: () => void }) => {
   const queryClient = useQueryClient();
-  const [name, setName] = useState("Local Agent");
+  const [name, setName] = useState("MCP Agent");
   const [selectedScopes, setSelectedScopes] = useState<Set<string>>(() => new Set(DEFAULT_TOKEN_SCOPES));
   const [createdToken, setCreatedToken] = useState<{ token: string; apiToken: ApiToken } | null>(null);
   const tokensQuery = useQuery({
@@ -1722,7 +1722,7 @@ const SettingsDialog = ({ onClose }: { onClose: () => void }) => {
               <KeyRound className="h-4 w-4 text-emerald-700" />
               设置
             </div>
-            <div className="mt-1 truncate text-xs text-slate-500">API Token / MCP / CLI</div>
+            <div className="mt-1 truncate text-xs text-slate-500">API Token / MCP</div>
           </div>
           <Button size="icon" variant="ghost" title="关闭" onClick={onClose}>
             <X className="h-4 w-4" />
