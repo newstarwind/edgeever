@@ -174,3 +174,24 @@ textarea {
   height: 0;
   pointer-events: none;
 }
+
+/* Custom premium scrollbar style */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(98, 127, 88, 0.16);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(98, 127, 88, 0.35);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(98, 127, 88, 0.16) transparent;
+}

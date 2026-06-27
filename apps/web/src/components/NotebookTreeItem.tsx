@@ -9,6 +9,7 @@ import {
   notebookTreeContainsId,
   focusNotebookTreeButton,
   NOTEBOOK_DRAG_MIME,
+  setMemoDragPreview,
 } from "@/lib/app-helpers";
 import { cn } from "@/lib/utils";
 import type { Notebook } from "@edgeever/shared";
@@ -152,22 +153,21 @@ export const NotebookTreeItem = ({
           <div
             data-notebook-id={node.id}
             className={cn(
-              "group flex h-9 items-center gap-1 rounded-md px-2 text-sm transition-all duration-200 select-none",
+              "group relative flex h-9 items-center gap-1 rounded-md px-2 text-sm transition-all duration-200 select-none",
               selected
                 ? "bg-[#f3f7f1] font-medium text-[#526d49]"
                 : hasSelectedDescendant
                   ? "bg-[#f3f7f1]/70 text-[#526d49] hover:bg-[#f3f7f1]"
                   : "text-slate-700 hover:bg-slate-50",
               dropPosition === "inside" && "ring-2 ring-[#9eb093]",
-              dropPosition === "inside" && hasChildren && !open && "bg-[#f3f7f1]",
-              dropPosition === "before" && "shadow-[inset_0_2px_0_0_#627f58]",
-              dropPosition === "after" && "shadow-[inset_0_-2px_0_0_#627f58]"
+              dropPosition === "inside" && hasChildren && !open && "bg-[#f3f7f1]"
             )}
             draggable
             onDragStart={(event) => {
               event.dataTransfer.effectAllowed = "move";
               event.dataTransfer.setData(NOTEBOOK_DRAG_MIME, node.id);
               event.dataTransfer.setData("text/plain", node.id);
+              setMemoDragPreview(event.dataTransfer, `移动笔记本「${node.name}」`);
             }}
             onDragOver={handleDragOver}
             onDragLeave={() => {
@@ -280,6 +280,12 @@ export const NotebookTreeItem = ({
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
             ) : null}
+            {dropPosition === "before" && (
+              <div className="absolute top-0 right-2 h-[3px] bg-[#627f58] rounded-full z-30 animate-pulse" style={{ left: `${20 + depth * 14}px` }} />
+            )}
+            {dropPosition === "after" && (
+              <div className="absolute bottom-0 right-2 h-[3px] bg-[#627f58] rounded-full z-30 animate-pulse" style={{ left: `${20 + depth * 14}px` }} />
+            )}
           </div>
         </ContextMenuTrigger>
         <ContextMenuContent className="w-48 bg-white border border-slate-200 rounded-md py-1 shadow-md">

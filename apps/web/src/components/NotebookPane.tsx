@@ -294,13 +294,13 @@ export const NotebookPane = ({
       >
         <div className="mb-4 hidden overflow-hidden rounded-full border border-emerald-100 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.08)] lg:flex">
           <button
-            className="flex h-14 min-w-0 flex-1 items-center gap-3 px-3 text-left transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-14 min-w-0 flex-1 items-center gap-3 px-3 text-left transition-all duration-200 hover:bg-emerald-50/70 disabled:cursor-not-allowed disabled:opacity-50"
             type="button"
             title="新建笔记"
             onClick={onCreateMemo}
             disabled={!canCreateMemo || isCreatingMemo}
           >
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-[0_8px_18px_rgba(5,150,105,0.28)]">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-[0_8px_18px_rgba(5,150,105,0.28)] transition-transform duration-200 group-hover:scale-105">
               <Plus className="h-6 w-6" />
             </span>
             <span className="min-w-0 truncate text-sm font-semibold text-slate-950">新建笔记</span>
@@ -322,7 +322,7 @@ export const NotebookPane = ({
             笔记本
           </span>
           <button
-            className="flex h-6 w-6 items-center justify-center rounded-md text-slate-500 transition hover:bg-emerald-50 hover:text-emerald-800 lg:hidden"
+            className="flex h-6 w-6 items-center justify-center rounded-md text-slate-500 transition-all duration-200 hover:bg-emerald-50 hover:text-emerald-800 lg:hidden"
             type="button"
             title="新建笔记本"
             aria-label="新建笔记本"

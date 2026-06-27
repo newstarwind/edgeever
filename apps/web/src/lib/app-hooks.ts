@@ -412,7 +412,7 @@ export const useBottomSheetSwipeToClose = <T extends HTMLElement>(sheetRef: RefO
 
   const handlePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {
-      if (event.pointerType === "mouse" || !event.isPrimary) {
+      if (!event.isPrimary) {
         return;
       }
 

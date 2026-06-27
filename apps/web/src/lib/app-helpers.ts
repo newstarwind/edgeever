@@ -511,22 +511,30 @@ export const notebookTreeContainsId = (nodes: NotebookNode[], targetNotebookId: 
 export const setMemoDragPreview = (dataTransfer: DataTransfer, label: string) => {
   const dragImage = document.createElement("div");
 
-  dragImage.textContent = label;
+  dragImage.innerHTML = `
+    <svg style="width: 15px; height: 15px; color: #627f58; flex-shrink: 0;" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"></path>
+    </svg>
+    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600;">${label}</span>
+  `;
+
   Object.assign(dragImage.style, {
     position: "fixed",
     top: "-9999px",
     left: "-9999px",
-    maxWidth: "220px",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-    border: "1px solid #cbd9c4",
-    borderRadius: "6px",
-    background: "#f3f7f1",
-    boxShadow: "0 14px 30px rgba(15, 23, 42, 0.16)",
-    color: "#1f2a1f",
-    font: "600 13px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    padding: "8px 10px",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    maxWidth: "240px",
+    border: "1px solid rgba(98, 127, 88, 0.28)",
+    borderRadius: "8px",
+    background: "rgba(244, 248, 243, 0.9)",
+    backdropFilter: "blur(10px)",
+    webkitBackdropFilter: "blur(10px)",
+    boxShadow: "0 12px 24px -4px rgba(98, 127, 88, 0.15), 0 4px 12px -2px rgba(15, 23, 42, 0.05)",
+    color: "#2c3b28",
+    font: "13px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    padding: "8px 12px",
     pointerEvents: "none",
     zIndex: "9999",
   });

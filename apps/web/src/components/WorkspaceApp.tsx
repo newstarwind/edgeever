@@ -1386,7 +1386,7 @@ export const WorkspaceApp = ({
         >
           <aside
             className={cn(
-              "min-h-0 border-r border-slate-200 bg-white/90 lg:block",
+              "min-h-0 border-r border-slate-200 bg-white/75 backdrop-blur-lg lg:block",
               activePane === "notebooks" ? "block" : "hidden"
             )}
           >
@@ -1441,7 +1441,7 @@ export const WorkspaceApp = ({
 
           <section
             className={cn(
-              "relative min-w-0 overflow-hidden border-r border-slate-200 bg-[#f6faf7] lg:block lg:bg-white",
+              "relative min-w-0 overflow-hidden border-r border-slate-200 bg-[#f8faf8] lg:block lg:bg-white/75 lg:backdrop-blur-lg",
               activePane === "memos" ? "block" : "hidden"
             )}
           >

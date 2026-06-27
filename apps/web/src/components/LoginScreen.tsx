@@ -23,47 +23,58 @@ export const LoginScreen = ({ error, isSubmitting, onSubmit }: LoginScreenProps)
   };
 
   return (
-    <main className="flex h-[100dvh] items-center justify-center bg-emerald-50 px-4 py-8 text-slate-950">
-      <section className="w-full max-w-[380px] rounded-md border border-emerald-100 bg-white p-5 shadow-panel">
-        <div className="mb-5 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-md border border-emerald-200 bg-emerald-100 text-emerald-900">
-            <LockKeyhole className="h-5 w-5" />
+    <main className="flex h-[100dvh] items-center justify-center bg-gradient-to-tr from-emerald-50/70 via-[#f6faf7] to-[#ebf3ee] px-4 py-8 text-slate-950">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(98,127,88,0.06),transparent_45%)] pointer-events-none" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,rgba(98,127,88,0.04),transparent_55%)] pointer-events-none" />
+      
+      <section className="relative w-full max-w-[400px] rounded-2xl border border-[#627f58]/12 bg-white/95 p-8 shadow-[0_20px_50px_rgba(98,127,88,0.08)] backdrop-blur-md transition-all duration-300 hover:shadow-[0_24px_60px_rgba(98,127,88,0.12)]">
+        <div className="mb-8 flex items-center gap-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-[#627f58] text-white shadow-[0_8px_16px_-4px_rgba(98,127,88,0.35)]">
+            <LockKeyhole className="h-5.5 w-5.5" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-lg font-semibold leading-tight tracking-normal">登录 EdgeEver</h1>
-            <p className="mt-1 text-sm text-slate-500">自托管笔记工作区</p>
+            <h1 className="text-xl font-bold leading-tight tracking-tight text-slate-900">登录 EdgeEver</h1>
+            <p className="mt-1 text-xs font-medium text-slate-400 uppercase tracking-wider">自托管笔记工作区</p>
           </div>
         </div>
 
-        <form className="space-y-4" onSubmit={handleSubmit}>
+        <form className="space-y-5" onSubmit={handleSubmit}>
           <label className="block">
-            <span className="mb-1.5 block text-sm font-medium text-slate-700">账号</span>
+            <span className="mb-2 block text-sm font-semibold text-slate-700">账号</span>
             <input
               autoComplete="username"
-              className="h-10 w-full rounded-md border border-emerald-100 bg-emerald-50/50 px-3 text-sm outline-none transition focus:border-emerald-300 focus:bg-white"
+              className="h-11 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3.5 text-sm outline-none transition-all duration-200 focus:border-[#627f58] focus:bg-white focus:ring-4 focus:ring-[#627f58]/10"
               value={username}
               onChange={(event) => setUsername(event.target.value)}
             />
           </label>
 
           <label className="block">
-            <span className="mb-1.5 block text-sm font-medium text-slate-700">密码</span>
+            <span className="mb-2 block text-sm font-semibold text-slate-700">密码</span>
             <input
               autoComplete="current-password"
-              className="h-10 w-full rounded-md border border-emerald-100 bg-emerald-50/50 px-3 text-sm outline-none transition focus:border-emerald-300 focus:bg-white"
+              className="h-11 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3.5 text-sm outline-none transition-all duration-200 focus:border-[#627f58] focus:bg-white focus:ring-4 focus:ring-[#627f58]/10"
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
             />
           </label>
 
-          {error ? (
-            <div className="rounded-md border border-rose-100 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div>
-          ) : null}
+          {error && (
+            <div className="rounded-lg border border-rose-100 bg-rose-50/80 px-3.5 py-2.5 text-xs font-medium text-rose-700 transition duration-150 animate-shake">
+              {error}
+            </div>
+          )}
 
-          <Button className="w-full justify-center" size="md" type="submit" variant="solid" disabled={isSubmitting}>
-            <LockKeyhole className="h-4 w-4" />
-            {isSubmitting ? "登录中" : "登录"}
+          <Button 
+            className="w-full h-11 justify-center rounded-lg bg-[#627f58] hover:bg-[#526d49] text-white font-semibold transition-all duration-200 shadow-[0_8px_20px_-4px_rgba(98,127,88,0.25)] hover:shadow-[0_12px_24px_-4px_rgba(98,127,88,0.35)]" 
+            size="md" 
+            type="submit" 
+            variant="solid" 
+            disabled={isSubmitting}
+          >
+            <LockKeyhole className="h-4 w-4 mr-1" />
+            {isSubmitting ? "安全登录中..." : "开启工作区"}
           </Button>
         </form>
       </section>
