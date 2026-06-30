@@ -53,7 +53,7 @@ jobs:
         run: bun run typecheck
 
       - name: Deploy tianma instance
-        run: bun run deploy:tianma
+        run: EDGE_EVER_INSTANCE=tianma bun run deploy
 
       - name: Sync tianma auth secret
         run: |
@@ -61,7 +61,7 @@ jobs:
             | EDGE_EVER_INSTANCE=tianma bun scripts/run-wrangler.mjs secret put EDGE_EVER_AUTH_PASSWORD_HASH
 
       - name: Deploy demo instance
-        run: bun run deploy:demo
+        run: EDGE_EVER_INSTANCE=demo bun run deploy
 
       - name: Sync demo auth secret
         run: |
