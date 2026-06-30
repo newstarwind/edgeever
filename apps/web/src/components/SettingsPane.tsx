@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { api } from "@/lib/api";
+import { ApiRequestError, api } from "@/lib/api";
 import { EVERNOTE_MIGRATION_PATH } from "@/lib/routes";
 import { cn, formatDateTime } from "@/lib/utils";
 import { AppConfirmDialog } from "./dialogs/ConfirmDialogs";
@@ -146,6 +146,28 @@ const confidenceLabel: Record<ProfileSnapshot["sections"][number]["insights"][nu
   low: "线索较弱",
   medium: "有一定依据",
   high: "依据较多",
+};
+
+const getProfileErrorMessage = (error: unknown) => {
+  if (!error) {
+    return undefined;
+  }
+
+  if (error instanceof ApiRequestError) {
+    if (error.code === "ai_request_failed") {
+      return "Cloudflare Workers AI 调用失败。请确认部署环境的 Workers AI 可用，或在环境变量 EDGE_EVER_PROFILE_MODEL 中指定一个当前可用的文本生成模型。";
+    }
+
+    if (error.code === "ai_not_configured") {
+      return "当前部署还没有配置 Workers AI binding，暂时无法生成人物画像。";
+    }
+
+    if (error.code === "no_profile_sources") {
+      return "还没有足够的有效笔记用于生成人物画像。";
+    }
+  }
+
+  return error instanceof Error ? error.message : "人物画像请求失败。";
 };
 
 const PersonaProfileCard = ({ profile, isLoading, isGenerating, errorMessage, onGenerate }: PersonaProfileCardProps) => (
@@ -814,7 +836,7 @@ export const SettingsPane = ({
             profile={profile}
             isLoading={profileQuery.isLoading}
             isGenerating={generateProfileMutation.isPending}
-            errorMessage={generateProfileMutation.error?.message ?? profileQuery.error?.message}
+            errorMessage={getProfileErrorMessage(generateProfileMutation.error ?? profileQuery.error)}
             onGenerate={() => generateProfileMutation.mutate()}
           />
           <EvernoteImportGuideCard onShowGuide={onShowGuide} />
