@@ -48,7 +48,8 @@ input {
 }
 
 .mobile-editor-back,
-.mobile-editor-done {
+.mobile-editor-done,
+.mobile-editor-tool-row button {
   border: 0;
   border-radius: 999px;
   background: transparent;
@@ -79,7 +80,8 @@ input {
   color: #fff;
 }
 
-.mobile-editor-done:disabled {
+.mobile-editor-done:disabled,
+.mobile-editor-tool-row button:disabled {
   background: #e2e8f0;
   color: #64748b;
 }
@@ -146,6 +148,21 @@ input {
 .mobile-editor-title::placeholder,
 .mobile-editor-tags::placeholder {
   color: #94a3b8;
+}
+
+.mobile-editor-tool-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobile-editor-tool-row button {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #334155;
+  font-size: 14px;
+  min-height: 34px;
+  padding: 6px 12px;
 }
 
 .edgeever-mobile-tiptap-editor {

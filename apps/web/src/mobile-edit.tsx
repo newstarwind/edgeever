@@ -4,7 +4,7 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
 import Placeholder from "@tiptap/extension-placeholder";
-import { docToMarkdown, emptyDoc, markdownToDoc, type MemoDetail, type TiptapDoc } from "@edgeever/shared";
+import { docToMarkdown, emptyDoc, markdownToDoc, type MemoDetail, type Resource, type TiptapDoc } from "@edgeever/shared";
 import "./styles/mobile-markdown-editor.css";
 
 const AUTO_SAVE_DELAY_MS = 1200;
@@ -17,6 +17,10 @@ type MemoResponse = {
   memo: MemoDetail;
 };
 
+type ResourceResponse = {
+  resource: Resource;
+};
+
 type MobileDraft = {
   title: string;
   tagsText: string;
@@ -24,7 +28,7 @@ type MobileDraft = {
   updatedAt: string;
 };
 
-type SaveState = "loading" | "idle" | "dirty" | "saving" | "saved" | "error" | "local-draft" | "leaving";
+type SaveState = "loading" | "idle" | "dirty" | "saving" | "saved" | "uploading" | "error" | "local-draft" | "leaving";
 
 const getParams = () => new URLSearchParams(window.location.hash ? window.location.hash.slice(1) : window.location.search);
 
@@ -38,8 +42,9 @@ const safeReturnPath = (value: string | null) => (value?.startsWith("/") ? value
 
 const requestJson = async <T,>(path: string, init?: RequestInit): Promise<T> => {
   const headers = new Headers(init?.headers);
+  const isFormData = init?.body instanceof FormData;
 
-  if (!headers.has("Content-Type")) {
+  if (!isFormData && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 
@@ -59,6 +64,16 @@ const requestJson = async <T,>(path: string, init?: RequestInit): Promise<T> => 
   }
 
   return response.json() as Promise<T>;
+};
+
+const uploadResource = async (memoId: string, file: File) => {
+  const form = new FormData();
+  form.append("file", file);
+
+  return requestJson<ResourceResponse>(`/api/v1/memos/${encodeURIComponent(memoId)}/resources`, {
+    method: "POST",
+    body: form,
+  });
 };
 
 const normalizeDoc = (memo: MemoDetail): TiptapDoc => {
@@ -95,6 +110,7 @@ const MobileTiptapEditorApp = () => {
   const initialFocusTimerRef = useRef<number | null>(null);
   const currentSavePromiseRef = useRef<Promise<boolean> | null>(null);
   const lastSavedSnapshotRef = useRef("");
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
 
   const setSaveStateStable = useCallback((nextState: SaveState) => {
     if (saveStateRef.current === nextState) {
@@ -319,6 +335,32 @@ const MobileTiptapEditorApp = () => {
     scheduleMetadataSave();
   };
 
+  const handleImageUpload = async (file?: File | null) => {
+    const currentMemo = memoRef.current;
+    if (!currentMemo || !editor || !file) {
+      return;
+    }
+
+    setError(null);
+    setSaveStateStable("uploading");
+
+    try {
+      const { resource } = await uploadResource(currentMemo.id, file);
+      editor
+        .chain()
+        .focus()
+        .setImage({
+          src: resource.url,
+          alt: resource.filename || file.name,
+          title: resource.filename || file.name,
+        })
+        .run();
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : "图片上传失败");
+      setSaveStateStable("error");
+    }
+  };
+
   const focusEditorAfterLoad = useCallback(() => {
     if (!editor) {
       return;
@@ -457,20 +499,26 @@ const MobileTiptapEditorApp = () => {
       ? "加载中"
       : saveState === "saving"
         ? "保存中"
-        : saveState === "dirty"
-          ? "未保存"
-          : saveState === "saved"
-            ? "已保存"
-            : saveState === "local-draft"
-              ? "本地草稿"
-              : saveState === "leaving"
-                ? "返回中"
-                : saveState === "error"
-                  ? "保存失败"
-                  : "已保存";
+        : saveState === "uploading"
+          ? "上传中"
+          : saveState === "dirty"
+            ? "未保存"
+            : saveState === "saved"
+              ? "已保存"
+              : saveState === "local-draft"
+                ? "本地草稿"
+                : saveState === "leaving"
+                  ? "返回中"
+                  : saveState === "error"
+                    ? "保存失败"
+                    : "已保存";
 
   const statusClassName =
-    saveState === "error" ? "error" : saveState === "dirty" || saveState === "saving" || saveState === "leaving" ? "active" : "";
+    saveState === "error"
+      ? "error"
+      : saveState === "dirty" || saveState === "saving" || saveState === "uploading" || saveState === "leaving"
+        ? "active"
+        : "";
 
   const fallbackMarkdown = memo ? docToMarkdown(contentJsonRef.current) : "";
 
@@ -507,6 +555,23 @@ const MobileTiptapEditorApp = () => {
           inputMode="text"
           placeholder="添加标签，用逗号分隔"
           onChange={(event) => handleTagsChange(event.target.value)}
+        />
+
+        <div className="mobile-editor-tool-row">
+          <button type="button" disabled={!memo || saveState === "loading" || saveState === "uploading"} onClick={() => imageInputRef.current?.click()}>
+            图片
+          </button>
+        </div>
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/gif,image/webp,image/avif"
+          hidden
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            void handleImageUpload(file);
+          }}
         />
 
         <div className="edgeever-mobile-tiptap-editor">
