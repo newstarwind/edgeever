@@ -5,101 +5,36 @@ import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Bold, Check, ChevronDown, ImagePlus, List, Minus, Quote } from "lucide-react";
-import { docToMarkdown, emptyDoc, markdownToDoc, type MemoDetail, type Notebook, type Resource, type TiptapDoc } from "@edgeever/shared";
+import { docToMarkdown, emptyDoc, type MemoDetail, type Notebook, type TiptapDoc } from "@edgeever/shared";
 import { getNotebookMoveOptions } from "@/lib/app-helpers";
 import { compressImageForUpload } from "@/lib/image-compression";
+import {
+  DEFAULT_MOBILE_EDITOR_MEMO_TITLE,
+  MOBILE_EDITOR_AUTO_SAVE_DELAY_MS,
+  MOBILE_EDITOR_INITIAL_FOCUS_DELAY_MS,
+  MOBILE_EDITOR_LEAVE_SAVE_TIMEOUT_MS,
+  getMobileEditorDraftKey,
+  getMobileEditorParams,
+  normalizeMobileEditorDoc,
+  parseMobileEditorTags,
+  requestMobileEditorJson,
+  safeMobileEditorReturnPath,
+  uploadMobileEditorResource,
+  type MobileEditorDraft,
+  type MobileEditorMemoResponse,
+  type MobileEditorSaveState,
+} from "@/lib/mobile-editor-standalone";
 import "./styles/mobile-markdown-editor.css";
-
-const AUTO_SAVE_DELAY_MS = 1200;
-const LEAVE_SAVE_TIMEOUT_MS = 1600;
-const INITIAL_EDITOR_FOCUS_DELAY_MS = 160;
-const DRAFT_STORAGE_PREFIX = "edgeever-mobile-tiptap-draft:";
-const DEFAULT_MEMO_TITLE = "无标题笔记";
-
-type MemoResponse = {
-  memo: MemoDetail;
-};
 
 type ListNotebooksResponse = {
   notebooks: Notebook[];
 };
 
-type ResourceResponse = {
-  resource: Resource;
-};
-
-type MobileDraft = {
-  title: string;
-  tagsText: string;
-  contentJson: TiptapDoc;
-  updatedAt: string;
-};
-
-type SaveState = "loading" | "idle" | "dirty" | "saving" | "saved" | "compressing" | "uploading" | "error" | "local-draft" | "leaving";
-
-const getParams = () => new URLSearchParams(window.location.hash ? window.location.hash.slice(1) : window.location.search);
-
-const parseTags = (value: string) =>
-  value
-    .split(/[,，]/)
-    .map((tag) => tag.trim())
-    .filter(Boolean);
-
-const safeReturnPath = (value: string | null) => (value?.startsWith("/") ? value : "/");
-
-const requestJson = async <T,>(path: string, init?: RequestInit): Promise<T> => {
-  const headers = new Headers(init?.headers);
-  const isFormData = init?.body instanceof FormData;
-
-  if (!isFormData && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
-
-  const response = await fetch(path, {
-    credentials: "include",
-    ...init,
-    headers,
-  });
-
-  if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    const message =
-      body && typeof body === "object" && "error" in body
-        ? (body as { error?: { message?: string } }).error?.message
-        : response.statusText;
-    throw new Error(message || "Request failed");
-  }
-
-  return response.json() as Promise<T>;
-};
-
-const uploadResource = async (memoId: string, file: File) => {
-  const form = new FormData();
-  form.append("file", file);
-
-  return requestJson<ResourceResponse>(`/api/v1/memos/${encodeURIComponent(memoId)}/resources`, {
-    method: "POST",
-    body: form,
-  });
-};
-
-const normalizeDoc = (memo: MemoDetail): TiptapDoc => {
-  if (memo.contentJson && typeof memo.contentJson === "object") {
-    return memo.contentJson as TiptapDoc;
-  }
-
-  if (memo.contentMarkdown) {
-    return markdownToDoc(memo.contentMarkdown);
-  }
-
-  return emptyDoc();
-};
-
 const MobileTiptapEditorApp = () => {
-  const params = useMemo(() => getParams(), []);
+  const params = useMemo(() => getMobileEditorParams(), []);
   const memoId = params.get("memoId");
-  const returnTo = safeReturnPath(params.get("returnTo"));
-  const draftKey = memoId ? `${DRAFT_STORAGE_PREFIX}${memoId}` : "";
+  const returnTo = safeMobileEditorReturnPath(params.get("returnTo"));
+  const draftKey = getMobileEditorDraftKey(memoId);
   const [memo, setMemo] = useState<MemoDetail | null>(null);
   const memoRef = useRef<MemoDetail | null>(null);
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
@@ -110,8 +45,8 @@ const MobileTiptapEditorApp = () => {
   const [tagsText, setTagsText] = useState("");
   const tagsTextRef = useRef("");
   const contentJsonRef = useRef<TiptapDoc>(emptyDoc());
-  const [saveState, setSaveState] = useState<SaveState>("loading");
-  const saveStateRef = useRef<SaveState>("loading");
+  const [saveState, setSaveState] = useState<MobileEditorSaveState>("loading");
+  const saveStateRef = useRef<MobileEditorSaveState>("loading");
   const [error, setError] = useState<string | null>(null);
   const notebookOptions = useMemo(() => getNotebookMoveOptions(notebooks), [notebooks]);
   const [, setToolbarVersion] = useState(0);
@@ -124,7 +59,7 @@ const MobileTiptapEditorApp = () => {
   const lastSavedSnapshotRef = useRef("");
   const imageInputRef = useRef<HTMLInputElement | null>(null);
 
-  const setSaveStateStable = useCallback((nextState: SaveState) => {
+  const setSaveStateStable = useCallback((nextState: MobileEditorSaveState) => {
     if (saveStateRef.current === nextState) {
       return;
     }
@@ -148,7 +83,7 @@ const MobileTiptapEditorApp = () => {
       return;
     }
 
-    const draft: MobileDraft = {
+    const draft: MobileEditorDraft = {
       title: titleRef.current,
       tagsText: tagsTextRef.current,
       contentJson: contentJsonRef.current,
@@ -157,14 +92,14 @@ const MobileTiptapEditorApp = () => {
     localStorage.setItem(draftKey, JSON.stringify(draft));
   }, [draftKey]);
 
-  const readLocalDraft = useCallback((): MobileDraft | null => {
+  const readLocalDraft = useCallback((): MobileEditorDraft | null => {
     if (!draftKey) {
       return null;
     }
 
     try {
       const raw = localStorage.getItem(draftKey);
-      return raw ? (JSON.parse(raw) as MobileDraft) : null;
+      return raw ? (JSON.parse(raw) as MobileEditorDraft) : null;
     } catch {
       return null;
     }
@@ -207,7 +142,7 @@ const MobileTiptapEditorApp = () => {
       saveTimerRef.current = window.setTimeout(() => {
         saveTimerRef.current = null;
         void saveNowRef.current();
-      }, AUTO_SAVE_DELAY_MS);
+      }, MOBILE_EDITOR_AUTO_SAVE_DELAY_MS);
     },
   });
 
@@ -272,14 +207,14 @@ const MobileTiptapEditorApp = () => {
 
       currentSavePromiseRef.current = (async () => {
         const nextContentJson = contentJsonRef.current;
-        const data = await requestJson<MemoResponse>(`/api/v1/memos/${encodeURIComponent(currentMemo.id)}`, {
+        const data = await requestMobileEditorJson<MobileEditorMemoResponse>(`/api/v1/memos/${encodeURIComponent(currentMemo.id)}`, {
           method: "PATCH",
           keepalive,
           body: JSON.stringify({
             expectedRevision: currentMemo.revision,
             title: titleRef.current,
             contentJson: nextContentJson,
-            tags: parseTags(tagsTextRef.current),
+            tags: parseMobileEditorTags(tagsTextRef.current),
           }),
         });
 
@@ -329,7 +264,7 @@ const MobileTiptapEditorApp = () => {
     saveTimerRef.current = window.setTimeout(() => {
       saveTimerRef.current = null;
       void saveNow();
-    }, AUTO_SAVE_DELAY_MS);
+    }, MOBILE_EDITOR_AUTO_SAVE_DELAY_MS);
   }, [persistLocalDraft, saveNow, setSaveStateStable]);
 
   const navigateBack = useCallback(() => {
@@ -351,7 +286,7 @@ const MobileTiptapEditorApp = () => {
 
     await Promise.race([
       saveNow({ keepalive: true }),
-      new Promise((resolve) => window.setTimeout(resolve, LEAVE_SAVE_TIMEOUT_MS)),
+      new Promise((resolve) => window.setTimeout(resolve, MOBILE_EDITOR_LEAVE_SAVE_TIMEOUT_MS)),
     ]);
     navigateBack();
   }, [navigateBack, persistLocalDraft, saveNow, setSaveStateStable]);
@@ -391,7 +326,7 @@ const MobileTiptapEditorApp = () => {
         return;
       }
 
-      const data = await requestJson<MemoResponse>(`/api/v1/memos/${encodeURIComponent(sourceMemo.id)}`, {
+      const data = await requestMobileEditorJson<MobileEditorMemoResponse>(`/api/v1/memos/${encodeURIComponent(sourceMemo.id)}`, {
         method: "PATCH",
         body: JSON.stringify({
           expectedRevision: sourceMemo.revision,
@@ -428,7 +363,7 @@ const MobileTiptapEditorApp = () => {
     try {
       const uploadFile = (await compressImageForUpload(file)).file;
       setSaveStateStable("uploading");
-      const { resource } = await uploadResource(currentMemo.id, uploadFile);
+      const { resource } = await uploadMobileEditorResource(currentMemo.id, uploadFile);
       editor
         .chain()
         .focus()
@@ -466,13 +401,13 @@ const MobileTiptapEditorApp = () => {
       }
 
       editor.commands.focus("end");
-    }, INITIAL_EDITOR_FOCUS_DELAY_MS);
+    }, MOBILE_EDITOR_INITIAL_FOCUS_DELAY_MS);
   }, [editor]);
 
   useEffect(() => {
     let cancelled = false;
 
-    void requestJson<ListNotebooksResponse>("/api/v1/notebooks")
+    void requestMobileEditorJson<ListNotebooksResponse>("/api/v1/notebooks")
       .then((data) => {
         if (!cancelled) {
           setNotebooks(data.notebooks);
@@ -502,14 +437,14 @@ const MobileTiptapEditorApp = () => {
 
     void (async () => {
       try {
-        const data = await requestJson<MemoResponse>(`/api/v1/memos/${encodeURIComponent(memoId)}`);
+        const data = await requestMobileEditorJson<MobileEditorMemoResponse>(`/api/v1/memos/${encodeURIComponent(memoId)}`);
         if (cancelled) {
           return;
         }
 
         const nextTitle = data.memo.title || "";
         const nextTagsText = Array.isArray(data.memo.tags) ? data.memo.tags.join(", ") : "";
-        const nextContentJson = normalizeDoc(data.memo);
+        const nextContentJson = normalizeMobileEditorDoc(data.memo);
         const draft = readLocalDraft();
         const useDraft = Boolean(draft && Date.parse(draft.updatedAt || "") >= Date.parse(data.memo.updatedAt || ""));
 
@@ -662,7 +597,7 @@ const MobileTiptapEditorApp = () => {
           autoComplete="on"
           autoCorrect="on"
           inputMode="text"
-          placeholder={DEFAULT_MEMO_TITLE}
+          placeholder={DEFAULT_MOBILE_EDITOR_MEMO_TITLE}
           onChange={(event) => handleTitleChange(event.target.value)}
         />
         <div className="mobile-editor-meta-row">
