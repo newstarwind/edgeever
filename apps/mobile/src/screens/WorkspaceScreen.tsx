@@ -10,6 +10,7 @@ import {
   BookOpen,
   Bold,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   CheckSquare,
@@ -1391,14 +1392,33 @@ const NotebookPickerModal = ({
   visible: boolean;
 }) => {
   const [searchText, setSearchText] = useState("");
+  const [collapsedNotebookIds, setCollapsedNotebookIds] = useState<Set<string>>(() => new Set());
   const notebookOptions = flattenNotebooks(notebooks, notebookSortMode);
-  const visibleNotebookOptions = filterNotebookOptions(notebookOptions, searchText);
+  const searchQuery = searchText.trim();
+  const childNotebookIds = getNotebookParentIdSet(notebooks);
+  const visibleNotebookOptions = searchQuery
+    ? filterNotebookOptions(notebookOptions, searchText)
+    : filterCollapsedNotebookOptions(notebookOptions, collapsedNotebookIds);
 
   useEffect(() => {
     if (visible) {
       setSearchText("");
     }
   }, [visible]);
+
+  const toggleNotebookCollapsed = (notebookId: string) => {
+    setCollapsedNotebookIds((current) => {
+      const next = new Set(current);
+
+      if (next.has(notebookId)) {
+        next.delete(notebookId);
+      } else {
+        next.add(notebookId);
+      }
+
+      return next;
+    });
+  };
 
   return (
     <Modal animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet" visible={visible}>
@@ -1440,21 +1460,27 @@ const NotebookPickerModal = ({
             {activeNotebookId === ALL_NOTES_ID ? <Check color="#0f172a" size={18} /> : null}
           </Pressable>
 
-          <Text style={styles.label}>{searchText.trim() ? "匹配的笔记本" : "笔记本"}</Text>
+          <Text style={styles.label}>{searchQuery ? "匹配的笔记本" : "笔记本"}</Text>
           {visibleNotebookOptions.map(({ depth, notebook }) => (
-            <Pressable
+            <View
               key={notebook.id}
-              onPress={() => onSelect(notebook.id)}
               style={[styles.moveNotebookRow, activeNotebookId === notebook.id && styles.moveNotebookRowActive, depth > 0 && { marginLeft: Math.min(depth * 14, 42) }]}
             >
-              <View style={styles.moveNotebookText}>
+              {childNotebookIds.has(notebook.id) && !searchQuery ? (
+                <Pressable accessibilityRole="button" onPress={() => toggleNotebookCollapsed(notebook.id)} style={styles.notebookTreeToggle}>
+                  {collapsedNotebookIds.has(notebook.id) ? <ChevronRight color="#64748b" size={17} /> : <ChevronDown color="#64748b" size={17} />}
+                </Pressable>
+              ) : (
+                <View style={styles.notebookTreeTogglePlaceholder} />
+              )}
+              <Pressable onPress={() => onSelect(notebook.id)} style={styles.moveNotebookSelectArea}>
                 <Text numberOfLines={1} style={styles.panelValue}>
                   {depth > 0 ? `${"· ".repeat(depth)}${notebook.name}` : notebook.name}
                 </Text>
                 <Text style={styles.panelLabel}>{notebook.memoCount} 条笔记</Text>
-              </View>
+              </Pressable>
               {activeNotebookId === notebook.id ? <Check color="#0f172a" size={18} /> : null}
-            </Pressable>
+            </View>
           ))}
           {visibleNotebookOptions.length === 0 ? (
             <View style={styles.emptyInlinePanel}>
@@ -4862,6 +4888,43 @@ const filterNotebookOptions = (options: NotebookOption[], searchText: string) =>
   return options.filter(({ notebook }) => notebook.name.toLowerCase().includes(query) || (notebook.slug || "").toLowerCase().includes(query));
 };
 
+const getNotebookParentIdSet = (notebooks: Notebook[]) => {
+  const notebookIds = new Set(notebooks.map((notebook) => notebook.id));
+  const parentIds = new Set<string>();
+
+  for (const notebook of notebooks) {
+    if (notebook.parentId && notebookIds.has(notebook.parentId)) {
+      parentIds.add(notebook.parentId);
+    }
+  }
+
+  return parentIds;
+};
+
+const filterCollapsedNotebookOptions = (options: NotebookOption[], collapsedNotebookIds: Set<string>) => {
+  if (collapsedNotebookIds.size === 0) {
+    return options;
+  }
+
+  const visibleOptions: NotebookOption[] = [];
+  let hiddenDepth: number | null = null;
+
+  for (const option of options) {
+    if (hiddenDepth !== null && option.depth > hiddenDepth) {
+      continue;
+    }
+
+    hiddenDepth = null;
+    visibleOptions.push(option);
+
+    if (collapsedNotebookIds.has(option.notebook.id)) {
+      hiddenDepth = option.depth;
+    }
+  }
+
+  return visibleOptions;
+};
+
 const isNotebookDescendant = (notebooks: Notebook[], candidateNotebookId: string, ancestorNotebookId: string) => {
   let current = notebooks.find((notebook) => notebook.id === candidateNotebookId) ?? null;
 
@@ -6230,6 +6293,23 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 4,
     minWidth: 0,
+  },
+  moveNotebookSelectArea: {
+    flex: 1,
+    gap: 4,
+    justifyContent: "center",
+    minHeight: 34,
+    minWidth: 0,
+  },
+  notebookTreeToggle: {
+    alignItems: "center",
+    borderRadius: 8,
+    height: 32,
+    justifyContent: "center",
+    width: 32,
+  },
+  notebookTreeTogglePlaceholder: {
+    width: 32,
   },
   editorForm: {
     gap: 12,
