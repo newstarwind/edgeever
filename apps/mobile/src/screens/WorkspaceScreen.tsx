@@ -1991,6 +1991,7 @@ const NotebookManagerModal = ({
 }) => {
   const { client } = useSession();
   const queryClient = useQueryClient();
+  const createNotebookInputRef = useRef<TextInput>(null);
   const [name, setName] = useState("");
   const [parentId, setParentId] = useState<string | null>(null);
   const [editingNotebookId, setEditingNotebookId] = useState<string | null>(null);
@@ -2072,6 +2073,12 @@ const NotebookManagerModal = ({
     ]);
   };
 
+  const prepareCreateChildNotebook = (notebook: Notebook) => {
+    setParentId(notebook.id);
+    setName("");
+    setTimeout(() => createNotebookInputRef.current?.focus(), 50);
+  };
+
   return (
     <Modal animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet" visible={visible}>
       <SafeAreaView style={styles.modalSafeArea}>
@@ -2086,7 +2093,7 @@ const NotebookManagerModal = ({
         <ScrollView contentContainerStyle={styles.editorForm}>
           <Text style={styles.label}>新建笔记本</Text>
           <View style={styles.inlineForm}>
-            <TextInput onChangeText={setName} placeholder="笔记本名称" placeholderTextColor="#94a3b8" style={[styles.titleInput, styles.inlineInput]} value={name} />
+            <TextInput ref={createNotebookInputRef} onChangeText={setName} placeholder="笔记本名称" placeholderTextColor="#94a3b8" style={[styles.titleInput, styles.inlineInput]} value={name} />
             <Pressable
               disabled={createNotebookMutation.isPending}
               onPress={() => createNotebookMutation.mutate()}
@@ -2168,6 +2175,11 @@ const NotebookManagerModal = ({
                     <Pencil color="#0f172a" size={18} />
                   </IconButton>
                 )}
+                {!editing ? (
+                  <IconButton disabled={createNotebookMutation.isPending} onPress={() => prepareCreateChildNotebook(notebook)}>
+                    <Plus color="#0f172a" size={18} />
+                  </IconButton>
+                ) : null}
                 <IconButton onPress={() => requestDeleteNotebook(notebook)}>
                   <Trash2 color="#b91c1c" size={18} />
                 </IconButton>
