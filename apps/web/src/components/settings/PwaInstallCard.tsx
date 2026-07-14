@@ -13,7 +13,7 @@ export const PwaInstallCard = () => {
   }
 
   return (
-    <Card className="w-full min-w-0 overflow-hidden shadow-none">
+    <Card className="w-full min-w-0 overflow-hidden shadow-none lg:hidden">
       <CardHeader className="p-4">
         <CardTitle className="flex items-center gap-2 text-sm">
           <Monitor className="h-4 w-4 text-emerald-700" />
