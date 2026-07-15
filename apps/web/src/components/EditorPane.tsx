@@ -1108,6 +1108,7 @@ const RichEditorPane = ({
   const [noteSearchReplaceOpen, setNoteSearchReplaceOpen] = useState(false);
   const [noteSearchReplacement, setNoteSearchReplacement] = useState("");
   const [noteSearchIndex, setNoteSearchIndex] = useState(0);
+  const [editorFullscreen, setEditorFullscreen] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(() =>
     typeof window === "undefined" ? false : window.matchMedia(MOBILE_EDITOR_QUERY).matches
   );
@@ -2267,7 +2268,14 @@ const RichEditorPane = ({
   };
 
   return (
-    <div className="relative flex h-full min-w-0 flex-col bg-white">
+    <div
+      className={cn(
+        "relative flex min-w-0 flex-col bg-white transition-all duration-200",
+        editorFullscreen
+          ? "fixed inset-0 z-50 h-[100dvh]"
+          : "h-full"
+      )}
+    >
       {selectionActionBar}
       <header className="shrink-0 border-b border-slate-200 bg-white">
         <div className="flex min-h-12 items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 sm:px-5">
@@ -2396,6 +2404,15 @@ const RichEditorPane = ({
               <History className="h-5 w-5" strokeWidth={2.25} />
             </Button>
             <GitHubRepositoryLink className="hidden h-8 w-8 justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70 lg:inline-flex" iconClassName="h-5 w-5" />
+            <button
+              className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/70"
+              type="button"
+              title={editorFullscreen ? "退出全屏" : "全屏编辑"}
+              aria-label={editorFullscreen ? "退出全屏" : "全屏编辑"}
+              onClick={() => setEditorFullscreen((prev) => !prev)}
+            >
+              {editorFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </button>
             <ThemeToggle />
             {!readOnly && (
               <Button
