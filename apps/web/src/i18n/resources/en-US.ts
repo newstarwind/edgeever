@@ -200,6 +200,7 @@ export const enUS = {
     reset: "Restore defaults",
     requireModifier: "Press a shortcut that includes Ctrl, ⌘, or Alt.",
     conflict: "This shortcut is already used by “{{label}}”.",
+    fixed: "Fixed shortcut",
     actions: {
       createMemo: {
         label: "New note",
@@ -216,6 +217,10 @@ export const enUS = {
       focusReplace: {
         label: "Replace text",
         description: "Open replace in the current note.",
+      },
+      toggleFullscreen: {
+        label: "Toggle fullscreen",
+        description: "Toggle editor fullscreen mode.",
       },
     },
   },
