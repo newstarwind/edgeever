@@ -206,6 +206,7 @@ export const zhCN = {
     reset: "恢复默认",
     requireModifier: "请按下包含 Ctrl、⌘ 或 Alt 的组合键。",
     conflict: "这个组合键已用于「{{label}}」。",
+    fixed: "固定快捷键",
     actions: {
       createMemo: {
         label: "新建笔记",
@@ -222,6 +223,10 @@ export const zhCN = {
       focusReplace: {
         label: "替换文本",
         description: "在当前笔记中打开替换。",
+      },
+      toggleFullscreen: {
+        label: "全屏编辑",
+        description: "切换编辑器全屏模式。",
       },
     },
   },

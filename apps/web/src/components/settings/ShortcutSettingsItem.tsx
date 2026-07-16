@@ -162,6 +162,23 @@ export const ShortcutSettingsItem = ({ shortcutSettings, onShortcutSettingsChang
             })}
           </div>
 
+          <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-slate-900">
+                {t("shortcuts.actions.toggleFullscreen.label") || "全屏编辑"}
+              </div>
+              <div className="mt-0.5 text-xs leading-4 text-slate-500">
+                {t("shortcuts.actions.toggleFullscreen.description") || "切换编辑器全屏模式。"}
+              </div>
+            </div>
+            <div className="mt-2 flex items-center gap-2">
+              <kbd className="inline-flex h-7 min-w-[2rem] items-center justify-center rounded-md border border-slate-300 bg-white px-2 font-mono text-xs font-semibold text-slate-700 shadow-sm">
+                F10
+              </kbd>
+              <span className="text-xs text-slate-400">{t("shortcuts.fixed") || "固定快捷键"}</span>
+            </div>
+          </div>
+
           {captureMessage ? (
             <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
               {captureMessage}

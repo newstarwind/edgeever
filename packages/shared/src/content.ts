@@ -1,6 +1,12 @@
+export type TiptapMark = {
+  type: "bold" | "italic" | "code" | "strike" | "link";
+  attrs?: Record<string, unknown>;
+};
+
 export type TiptapTextNode = {
   type: "text";
   text: string;
+  marks?: TiptapMark[];
 };
 
 export type TiptapNode = {
@@ -20,6 +26,117 @@ export const emptyDoc = (): TiptapDoc => ({
   type: "doc",
   content: [{ type: "paragraph" }],
 });
+
+const parseInlineMarkdown = (text: string): TiptapTextNode[] => {
+  if (!text) {
+    return [];
+  }
+
+  const nodes: TiptapTextNode[] = [];
+  let remaining = text;
+
+  while (remaining.length > 0) {
+    // Try to find the earliest inline markdown match
+    const boldItalicMatch = remaining.match(/^\*\*\*([\s\S]*?)\*\*\*/);
+    const boldMatch = remaining.match(/^\*\*([\s\S]*?)\*\*/);
+    const italicMatch = remaining.match(/^\*([^*].*?)\*/);
+    const boldUMatch = remaining.match(/^__([\s\S]*?)__/);
+    const italicUMatch = remaining.match(/^_([^_].*?)_/);
+    const strikeMatch = remaining.match(/^~~([\s\S]*?)~~/);
+    const codeMatch = remaining.match(/^`([^`]+)`/);
+    const imageMatch = remaining.match(/^!\[([^\]]*)\]\((\S+?)(?:\s+"([^"]+)")?\)/);
+    const linkMatch = remaining.match(/^\[([^\]]+)\]\(([^)]+)\)/);
+
+    // Find the earliest match (smallest index is 0 since we use ^ anchors)
+    // Prioritize longer markers first to avoid * matching inside **
+    type MatchResult = { type: string; match: RegExpMatchArray; length: number };
+    const matches: MatchResult[] = [];
+
+    if (boldItalicMatch) matches.push({ type: "boldItalic", match: boldItalicMatch, length: boldItalicMatch[0].length });
+    if (boldMatch) matches.push({ type: "bold", match: boldMatch, length: boldMatch[0].length });
+    if (italicMatch) matches.push({ type: "italic", match: italicMatch, length: italicMatch[0].length });
+    if (boldUMatch) matches.push({ type: "bold", match: boldUMatch, length: boldUMatch[0].length });
+    if (italicUMatch) matches.push({ type: "italic", match: italicUMatch, length: italicUMatch[0].length });
+    if (strikeMatch) matches.push({ type: "strike", match: strikeMatch, length: strikeMatch[0].length });
+    if (codeMatch) matches.push({ type: "code", match: codeMatch, length: codeMatch[0].length });
+    if (imageMatch) matches.push({ type: "image", match: imageMatch, length: imageMatch[0].length });
+    if (linkMatch) matches.push({ type: "link", match: linkMatch, length: linkMatch[0].length });
+
+    // Sort by match length descending (longer patterns first, e.g., *** before ** before *)
+    matches.sort((a, b) => b.length - a.length);
+
+    if (matches.length > 0) {
+      const earliest = matches[0];
+      const match = earliest.match;
+
+      // If match doesn't start at position 0, add plain text prefix
+      if (match.index! > 0) {
+        nodes.push({ type: "text", text: remaining.slice(0, match.index) });
+      }
+
+      switch (earliest.type) {
+        case "boldItalic": {
+          const inner = parseInlineMarkdown(match[1]!);
+          for (const n of inner) {
+            nodes.push({
+              ...n,
+              marks: [...(n.marks || []), { type: "bold" }, { type: "italic" }],
+            });
+          }
+          break;
+        }
+        case "bold": {
+          const inner = parseInlineMarkdown(match[1]!);
+          for (const n of inner) {
+            nodes.push({ ...n, marks: [...(n.marks || []), { type: "bold" }] });
+          }
+          break;
+        }
+        case "italic":
+          nodes.push({ type: "text", text: match[1]!, marks: [{ type: "italic" }] });
+          break;
+        case "strike":
+          nodes.push({ type: "text", text: match[1]!, marks: [{ type: "strike" }] });
+          break;
+        case "code":
+          nodes.push({ type: "text", text: match[1]!, marks: [{ type: "code" }] });
+          break;
+        case "image":
+          nodes.push({
+            type: "text",
+            text: match[1] || "",
+            marks: [{ type: "link", attrs: { href: match[2]!, title: match[3] || null } }],
+          });
+          break;
+        case "link":
+          nodes.push({ type: "text", text: match[1]!, marks: [{ type: "link", attrs: { href: match[2]! } }] });
+          break;
+      }
+
+      remaining = remaining.slice(match.index! + match[0].length);
+    } else {
+      // No match found, consume one character
+      nodes.push({ type: "text", text: remaining[0]! });
+      remaining = remaining.slice(1);
+    }
+  }
+
+  return nodes;
+};
+
+const isListItem = (line: string): false | "bullet" | "ordered" => {
+  if (/^\s*[-*+]\s+/.test(line)) return "bullet";
+  if (/^\s*\d+\.\s+/.test(line)) return "ordered";
+  return false;
+};
+
+const stripListItemMarker = (line: string): string => {
+  return line.replace(/^\s*(?:[-*+]|\d+\.)\s+/, "");
+};
+
+const isBlockquoteLine = (line: string): boolean => /^\s*>\s?/.test(line);
+
+const stripBlockquoteMarker = (line: string): string => line.replace(/^\s*>\s?/, "");
 
 export const markdownToDoc = (markdown: string): TiptapDoc => {
   const lines = markdown.replace(/\r\n/g, "\n").split("\n");
@@ -54,6 +171,51 @@ export const markdownToDoc = (markdown: string): TiptapDoc => {
       continue;
     }
 
+    // Blockquote: collect consecutive > lines
+    if (isBlockquoteLine(lines[index])) {
+      const quoteLines: string[] = [];
+      while (index < lines.length && isBlockquoteLine(lines[index])) {
+        quoteLines.push(stripBlockquoteMarker(lines[index]));
+        index += 1;
+      }
+      const quoteText = quoteLines.join("\n").trim();
+      content.push({
+        type: "blockquote",
+        content: [{ type: "paragraph", content: parseInlineMarkdown(quoteText) }],
+      });
+      continue;
+    }
+
+    // Unordered list: collect consecutive bullet items
+    if (isListItem(lines[index]) === "bullet") {
+      const listItems: TiptapNode[] = [];
+      while (index < lines.length && isListItem(lines[index]) === "bullet") {
+        const itemText = stripListItemMarker(lines[index]);
+        listItems.push({
+          type: "listItem",
+          content: [{ type: "paragraph", content: parseInlineMarkdown(itemText) }],
+        });
+        index += 1;
+      }
+      content.push({ type: "bulletList", content: listItems });
+      continue;
+    }
+
+    // Ordered list: collect consecutive ordered items
+    if (isListItem(lines[index]) === "ordered") {
+      const listItems: TiptapNode[] = [];
+      while (index < lines.length && isListItem(lines[index]) === "ordered") {
+        const itemText = stripListItemMarker(lines[index]);
+        listItems.push({
+          type: "listItem",
+          content: [{ type: "paragraph", content: parseInlineMarkdown(itemText) }],
+        });
+        index += 1;
+      }
+      content.push({ type: "orderedList", content: listItems });
+      continue;
+    }
+
     const blockLines: string[] = [];
     while (index < lines.length && lines[index].trim()) {
       blockLines.push(lines[index]);
@@ -61,6 +223,13 @@ export const markdownToDoc = (markdown: string): TiptapDoc => {
     }
 
     const block = blockLines.join("\n").trim();
+
+    // Check if block is a Markdown table
+    if (isTableBlock(blockLines)) {
+      content.push(parseTable(blockLines));
+      continue;
+    }
+
     const heading = /^(#{1,3})\s+(.+)$/.exec(block);
     const image = /^!\[([^\]]*)\]\((\S+?)(?:\s+"([^"]+)")?\)$/.exec(block);
 
@@ -68,7 +237,7 @@ export const markdownToDoc = (markdown: string): TiptapDoc => {
       content.push({
         type: "heading",
         attrs: { level: heading[1].length },
-        content: [{ type: "text", text: heading[2] }],
+        content: parseInlineMarkdown(heading[2]!),
       });
       continue;
     }
@@ -92,7 +261,7 @@ export const markdownToDoc = (markdown: string): TiptapDoc => {
 
     content.push({
       type: "paragraph",
-      content: [{ type: "text", text: block }],
+      content: parseInlineMarkdown(block),
     });
   }
 
@@ -101,6 +270,51 @@ export const markdownToDoc = (markdown: string): TiptapDoc => {
   }
 
   return { type: "doc", content };
+};
+
+/** Detect whether lines form a Markdown table block. */
+const isTableBlock = (lines: string[]): boolean => {
+  if (lines.length < 2) return false;
+  if (!lines.every((l) => /^\s*\|.*\|\s*$/.test(l))) return false;
+  // Second line must be a separator (|---|)
+  const sep = lines[1].replace(/\|/g, "").trim();
+  return /^-{3,}(\s+-{3,})*$/.test(sep);
+};
+
+/** Parse pipe-delimited table lines into a TipTap table node. */
+const parseTable = (lines: string[]): TiptapNode => {
+  const rows: TiptapNode[] = [];
+
+  const parseRow = (line: string): string[] =>
+    line
+      .trim()
+      .replace(/^\|/, "")
+      .replace(/\|$/, "")
+      .split("|")
+      .map((c) => c.trim());
+
+  const makeCell = (type: "tableHeader" | "tableCell", text: string): TiptapNode => ({
+    type,
+    content: [{ type: "paragraph", content: parseInlineMarkdown(text) }],
+  });
+
+  // Header row
+  const headerCells = parseRow(lines[0]);
+  rows.push({
+    type: "tableRow",
+    content: headerCells.map((c) => makeCell("tableHeader", c)),
+  });
+
+  // Data rows (skip separator at index 1)
+  for (let i = 2; i < lines.length; i++) {
+    const cells = parseRow(lines[i]);
+    rows.push({
+      type: "tableRow",
+      content: cells.map((c) => makeCell("tableCell", c)),
+    });
+  }
+
+  return { type: "table", content: rows };
 };
 
 export const docToText = (doc: unknown): string => {
@@ -216,6 +430,32 @@ const blockToMarkdown = (node: unknown): string => {
     return `\`\`\`${languageSuffix}\n${code}\n\`\`\``;
   }
 
+  if (current.type === "table" && Array.isArray(current.content)) {
+    const rows = current.content as Array<{ type?: string; content?: unknown }>;
+    if (rows.length === 0) return "";
+
+    const lines: string[] = [];
+    for (let i = 0; i < rows.length; i++) {
+      const cells = rows[i].content;
+      if (!Array.isArray(cells)) continue;
+
+      const cellTexts = cells.map((cell) => {
+        const cellContent = (cell as { content?: unknown }).content;
+        return contentToPlainText(cellContent).trim();
+      });
+      lines.push(`| ${cellTexts.join(" | ")} |`);
+
+      // Insert separator after header row
+      if (i === 0 && cells.length > 0) {
+        const firstCellType = (cells[0] as { type?: string }).type;
+        if (firstCellType === "tableHeader") {
+          lines.push(`| ${cells.map(() => "---").join(" | ")} |`);
+        }
+      }
+    }
+    return lines.join("\n");
+  }
+
   return inlineToMarkdown(current.content);
 };
 
@@ -259,12 +499,35 @@ const inlineToMarkdown = (content: unknown): string => {
       const current = node as {
         type?: unknown;
         text?: unknown;
+        marks?: Array<{ type: string; attrs?: Record<string, unknown> }>;
         attrs?: Record<string, unknown>;
         content?: unknown;
       };
 
       if (typeof current.text === "string") {
-        return current.text;
+        const marks = current.marks;
+        let text = current.text;
+
+        if (marks && marks.length > 0) {
+          // Apply marks in reverse order (outermost first)
+          for (let i = marks.length - 1; i >= 0; i--) {
+            const mark = marks[i];
+            if (mark.type === "bold") {
+              text = `**${text}**`;
+            } else if (mark.type === "italic") {
+              text = `*${text}*`;
+            } else if (mark.type === "code") {
+              text = `\`${text}\``;
+            } else if (mark.type === "strike") {
+              text = `~~${text}~~`;
+            } else if (mark.type === "link") {
+              const href = typeof mark.attrs?.href === "string" ? mark.attrs.href : "";
+              text = `[${text}](${href})`;
+            }
+          }
+        }
+
+        return text;
       }
 
       if (current.type === "hardBreak") {

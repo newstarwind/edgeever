@@ -303,6 +303,50 @@ textarea {
   border-top: 1px solid rgb(var(--brand-green-300-rgb));
 }
 
+/* ── Table ─────────────────────────────────────────── */
+.ProseMirror table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  overflow-x: auto;
+  display: block;
+  font-size: 0.9em;
+}
+
+.ProseMirror th,
+.ProseMirror td {
+  border: 1px solid var(--brand-green-border);
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+  min-width: 60px;
+}
+
+.ProseMirror th {
+  background: rgb(var(--brand-green-100-rgb) / 0.4);
+  font-weight: 650;
+}
+
+.ProseMirror td p {
+  margin: 0;
+}
+
+.ProseMirror th p {
+  margin: 0;
+}
+
+.ProseMirror .selectedCell {
+  background: rgb(var(--brand-green-200-rgb) / 0.3);
+}
+
+:root.dark .ProseMirror th {
+  background: rgb(var(--brand-green-800-rgb) / 0.3);
+}
+
+:root.dark .ProseMirror .selectedCell {
+  background: rgb(var(--brand-green-700-rgb) / 0.25);
+}
+
 .ProseMirror img {
   display: block;
   max-width: 100%;

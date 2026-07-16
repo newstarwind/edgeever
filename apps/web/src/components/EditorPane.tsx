@@ -3,6 +3,10 @@ import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { NodeViewWrapper, ReactNodeViewRenderer, useEditor, EditorContent, type Editor, type NodeViewProps } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
+import { Table } from "@tiptap/extension-table";
+import { TableRow } from "@tiptap/extension-table-row";
+import { TableCell } from "@tiptap/extension-table-cell";
+import { TableHeader } from "@tiptap/extension-table-header";
 import Image from "@tiptap/extension-image";
 import Placeholder from "@tiptap/extension-placeholder";
 import { useTranslation } from "react-i18next";
@@ -1108,6 +1112,7 @@ const RichEditorPane = ({
   const [noteSearchReplaceOpen, setNoteSearchReplaceOpen] = useState(false);
   const [noteSearchReplacement, setNoteSearchReplacement] = useState("");
   const [noteSearchIndex, setNoteSearchIndex] = useState(0);
+  const [editorFullscreen, setEditorFullscreen] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(() =>
     typeof window === "undefined" ? false : window.matchMedia(MOBILE_EDITOR_QUERY).matches
   );
@@ -1321,6 +1326,10 @@ const RichEditorPane = ({
     extensions: [
       StarterKit.configure({ codeBlock: false }),
       CodeBlockLowlight.configure({ lowlight: codeBlockLowlight, defaultLanguage: "plaintext" }),
+      Table.configure({ resizable: true }),
+      TableRow,
+      TableCell,
+      TableHeader,
       ResizableImage.configure({
         allowBase64: false,
         inline: false,
@@ -1492,6 +1501,19 @@ const RichEditorPane = ({
       editor.off("transaction", refreshToolbar);
     };
   }, [editor]);
+
+  // F10 切换全屏编辑
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "F10") {
+        event.preventDefault();
+        setEditorFullscreen((prev) => !prev);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const getMobilePlainTextValue = useCallback(
     () => (mobileTextAreaRef.current ? getMobilePlainTextElementValue(mobileTextAreaRef.current) : mobilePlainText),
@@ -2267,9 +2289,16 @@ const RichEditorPane = ({
   };
 
   return (
-    <div className="relative flex h-full min-w-0 flex-col bg-white">
+    <div
+      className={cn(
+        "relative flex min-w-0 flex-col bg-white transition-all duration-200",
+        editorFullscreen
+          ? "fixed inset-0 z-50 h-[100dvh]"
+          : "h-full"
+      )}
+    >
       {selectionActionBar}
-      <header className="shrink-0 border-b border-slate-200 bg-white">
+      <header className={cn("shrink-0 border-b border-slate-200 bg-white", editorFullscreen && "hidden")}>
         <div className="flex min-h-12 items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 sm:px-5">
           <div className="flex min-w-0 items-center gap-2 text-sm">
             <Button
@@ -2395,6 +2424,19 @@ const RichEditorPane = ({
             <Button className="hidden h-8 w-8 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-950 focus-visible:ring-2 focus-visible:ring-slate-300 sm:inline-flex" size="icon" variant="ghost" title="版本历史" aria-label="版本历史" onClick={() => setHistoryOpen(true)}>
               <History className="h-5 w-5" strokeWidth={2.25} />
             </Button>
+            <button
+              className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/70"
+              type="button"
+              title={editorFullscreen ? "退出全屏" : "全屏编辑"}
+              aria-label={editorFullscreen ? "退出全屏" : "全屏编辑"}
+              onClick={() => setEditorFullscreen((prev) => !prev)}
+            >
+              {editorFullscreen ? (
+                <ChevronRight className="h-4 w-4" />
+              ) : (
+                <ChevronLeft className="h-4 w-4" />
+              )}
+            </button>
             <GitHubRepositoryLink className="hidden h-8 w-8 justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70 lg:inline-flex" iconClassName="h-5 w-5" />
             <ThemeToggle />
             {!readOnly && (
