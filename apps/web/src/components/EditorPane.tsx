@@ -1502,6 +1502,19 @@ const RichEditorPane = ({
     };
   }, [editor]);
 
+  // F8 切换 Markdown/富文本编辑
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "F8") {
+        event.preventDefault();
+        handleMarkdownModeChange();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleMarkdownModeChange]);
+
   // F10 切换全屏编辑
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
