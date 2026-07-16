@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "edgeever": {
+      "url": "https://edgeever.davidqi.workers.dev/mcp",
+      "headers": {
+        "Authorization": "Bearer eev_GtUhSB5gtPLGwuuC7yYDLD8si4NktQ6V2VKM7YZrWaU"
+      }
+    }
+  }
+}
