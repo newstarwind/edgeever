@@ -1507,13 +1507,13 @@ const RichEditorPane = ({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "F8") {
         event.preventDefault();
-        handleMarkdownModeChange();
+        markdownModeChangeRef.current();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleMarkdownModeChange]);
+  }, []);
 
   // F10 切换全屏编辑
   useEffect(() => {
@@ -1804,6 +1804,9 @@ const RichEditorPane = ({
     setMarkdownSource(docToMarkdown(editor.getJSON() as TiptapDoc));
     setIsMarkdownMode(true);
   }, [editor, effectiveReadOnly, isMarkdownMode, markdownSource]);
+
+  const markdownModeChangeRef = useRef<() => void>(handleMarkdownModeChange);
+  markdownModeChangeRef.current = handleMarkdownModeChange;
 
   const handleMarkdownSourceChange = useCallback((value: string) => {
     setMarkdownSource(value);
