@@ -228,6 +228,10 @@ export const zhCN = {
         label: "全屏编辑",
         description: "切换编辑器全屏模式。",
       },
+      toggleMarkdown: {
+        label: "切换 Markdown/源码",
+        description: "在 Markdown 源码与富文本编辑之间切换。",
+      },
     },
   },
   options: {
