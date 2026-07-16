@@ -223,6 +223,13 @@ export const markdownToDoc = (markdown: string): TiptapDoc => {
     }
 
     const block = blockLines.join("\n").trim();
+
+    // Check if block is a Markdown table
+    if (isTableBlock(blockLines)) {
+      content.push(parseTable(blockLines));
+      continue;
+    }
+
     const heading = /^(#{1,3})\s+(.+)$/.exec(block);
     const image = /^!\[([^\]]*)\]\((\S+?)(?:\s+"([^"]+)")?\)$/.exec(block);
 
@@ -263,6 +270,51 @@ export const markdownToDoc = (markdown: string): TiptapDoc => {
   }
 
   return { type: "doc", content };
+};
+
+/** Detect whether lines form a Markdown table block. */
+const isTableBlock = (lines: string[]): boolean => {
+  if (lines.length < 2) return false;
+  if (!lines.every((l) => /^\s*\|.*\|\s*$/.test(l))) return false;
+  // Second line must be a separator (|---|)
+  const sep = lines[1].replace(/\|/g, "").trim();
+  return /^-{3,}(\s+-{3,})*$/.test(sep);
+};
+
+/** Parse pipe-delimited table lines into a TipTap table node. */
+const parseTable = (lines: string[]): TiptapNode => {
+  const rows: TiptapNode[] = [];
+
+  const parseRow = (line: string): string[] =>
+    line
+      .trim()
+      .replace(/^\|/, "")
+      .replace(/\|$/, "")
+      .split("|")
+      .map((c) => c.trim());
+
+  const makeCell = (type: "tableHeader" | "tableCell", text: string): TiptapNode => ({
+    type,
+    content: [{ type: "paragraph", content: [{ type: "text", text }] }],
+  });
+
+  // Header row
+  const headerCells = parseRow(lines[0]);
+  rows.push({
+    type: "tableRow",
+    content: headerCells.map((c) => makeCell("tableHeader", c)),
+  });
+
+  // Data rows (skip separator at index 1)
+  for (let i = 2; i < lines.length; i++) {
+    const cells = parseRow(lines[i]);
+    rows.push({
+      type: "tableRow",
+      content: cells.map((c) => makeCell("tableCell", c)),
+    });
+  }
+
+  return { type: "table", content: rows };
 };
 
 export const docToText = (doc: unknown): string => {
@@ -376,6 +428,32 @@ const blockToMarkdown = (node: unknown): string => {
     const languageSuffix = language && language !== "plaintext" ? language : "";
     const code = contentToPlainText(current.content);
     return `\`\`\`${languageSuffix}\n${code}\n\`\`\``;
+  }
+
+  if (current.type === "table" && Array.isArray(current.content)) {
+    const rows = current.content as Array<{ type?: string; content?: unknown }>;
+    if (rows.length === 0) return "";
+
+    const lines: string[] = [];
+    for (let i = 0; i < rows.length; i++) {
+      const cells = rows[i].content;
+      if (!Array.isArray(cells)) continue;
+
+      const cellTexts = cells.map((cell) => {
+        const cellContent = (cell as { content?: unknown }).content;
+        return contentToPlainText(cellContent).trim();
+      });
+      lines.push(`| ${cellTexts.join(" | ")} |`);
+
+      // Insert separator after header row
+      if (i === 0 && cells.length > 0) {
+        const firstCellType = (cells[0] as { type?: string }).type;
+        if (firstCellType === "tableHeader") {
+          lines.push(`| ${cells.map(() => "---").join(" | ")} |`);
+        }
+      }
+    }
+    return lines.join("\n");
   }
 
   return inlineToMarkdown(current.content);
