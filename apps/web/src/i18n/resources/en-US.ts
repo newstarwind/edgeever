@@ -222,6 +222,10 @@ export const enUS = {
         label: "Toggle fullscreen",
         description: "Toggle editor fullscreen mode.",
       },
+      toggleMarkdown: {
+        label: "Toggle Markdown/source",
+        description: "Switch between Markdown source and rich text editing.",
+      },
     },
   },
   options: {
