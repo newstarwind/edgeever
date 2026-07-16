@@ -295,7 +295,7 @@ const parseTable = (lines: string[]): TiptapNode => {
 
   const makeCell = (type: "tableHeader" | "tableCell", text: string): TiptapNode => ({
     type,
-    content: [{ type: "paragraph", content: [{ type: "text", text }] }],
+    content: [{ type: "paragraph", content: parseInlineMarkdown(text) }],
   });
 
   // Header row
