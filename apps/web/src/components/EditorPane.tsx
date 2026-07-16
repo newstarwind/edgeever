@@ -2298,7 +2298,7 @@ const RichEditorPane = ({
       )}
     >
       {selectionActionBar}
-      <header className="shrink-0 border-b border-slate-200 bg-white">
+      <header className={cn("shrink-0 border-b border-slate-200 bg-white", editorFullscreen && "hidden")}>
         <div className="flex min-h-12 items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 sm:px-5">
           <div className="flex min-w-0 items-center gap-2 text-sm">
             <Button
