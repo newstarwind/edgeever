@@ -115,9 +115,17 @@ const parseInlineMarkdown = (text: string): TiptapTextNode[] => {
 
       remaining = remaining.slice(match.index! + match[0].length);
     } else {
-      // No match found, consume one character
-      nodes.push({ type: "text", text: remaining[0]! });
-      remaining = remaining.slice(1);
+      // No match found, consume consecutive plain text as a single node
+      // Markdown syntax characters: * _ ` [ ! ~
+      const plainTextMatch = remaining.match(/^[^*_`\[!~]+/);
+      if (plainTextMatch) {
+        nodes.push({ type: "text", text: plainTextMatch[0]! });
+        remaining = remaining.slice(plainTextMatch[0].length);
+      } else {
+        // Starts with a raw syntax char (e.g. lone *) – consume one char to avoid infinite loop
+        nodes.push({ type: "text", text: remaining[0]! });
+        remaining = remaining.slice(1);
+      }
     }
   }
 
