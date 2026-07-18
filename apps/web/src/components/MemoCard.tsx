@@ -319,7 +319,7 @@ export const MemoCard = ({
             : "active:bg-slate-50 lg:hover:bg-slate-50"
       )}
     >
-      <div className={cn("flex min-h-[132px] items-center", listDensity === "compact" && "min-h-[84px] lg:min-h-[76px]")}>
+      <div className={cn("flex min-h-[132px] items-center", listDensity === "compact" && "min-h-[56px] lg:min-h-[48px]")}>
         {showSelectionControl && (
           <button
             className="ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/70 focus-visible:ring-offset-2 lg:ml-3 lg:h-6 lg:w-6"
@@ -367,19 +367,19 @@ export const MemoCard = ({
           onKeyDown={handleKeyDown}
           title={t("memoCard.interactionHint")}
         >
-          <div className={cn("mb-2 flex min-w-0 items-center gap-1.5 text-base font-semibold leading-6 text-slate-950 lg:text-base", listDensity === "compact" && "mb-1")}>
+          <div className={cn("mb-2 flex min-w-0 items-center gap-1.5 font-semibold leading-6 text-slate-950", listDensity === "compact" ? "text-sm mb-0" : "text-base lg:text-base")}>
             {memo.isPinned && <Star className="h-4 w-4 shrink-0 fill-current text-slate-500" />}
             <span className="min-w-0 truncate">{memoTitle}</span>
           </div>
+          {listDensity !== "compact" && (
           <div
-            className={cn(
-              "line-clamp-2 min-h-10 text-sm leading-5 text-slate-950",
-              listDensity === "compact" && "line-clamp-1 min-h-0 text-[13px]"
-            )}
+            className="line-clamp-2 min-h-10 text-sm leading-5 text-slate-950"
           >
             {memoExcerpt}
           </div>
-          <div className={cn("mt-5 flex flex-wrap items-center gap-2", listDensity === "compact" && "mt-2")}>
+          )}
+          {listDensity !== "compact" && (
+          <div className="mt-5 flex flex-wrap items-center gap-2">
             <time className="text-xs font-medium text-slate-800 lg:text-sm lg:font-normal lg:text-slate-800">
               {formatMemoPreviewDate(memo.updatedAt, i18n.resolvedLanguage ?? i18n.language, t("memoCard.yesterday"))}
             </time>
@@ -389,6 +389,7 @@ export const MemoCard = ({
               </span>
             ))}
           </div>
+          )}
         </button>
         {!selectionMode && (
           <div
