@@ -369,7 +369,7 @@ export const MemoCard = ({
         >
           <div className={cn("mb-2 flex min-w-0 items-center gap-1.5 font-semibold leading-6 text-slate-950", listDensity === "compact" ? "text-sm mb-0" : "text-base lg:text-base")}>
             {memo.isPinned && <Star className="h-4 w-4 shrink-0 fill-current text-slate-500" />}
-            <span className="min-w-0 truncate">{memoTitle}</span>
+            <span className={cn("min-w-0", listDensity === "compact" ? "" : "truncate")}>{memoTitle}</span>
           </div>
           {listDensity !== "compact" && (
           <div
