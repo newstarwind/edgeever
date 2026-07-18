@@ -233,6 +233,15 @@ export const getActiveBlockValue = (editor: any): string => {
     if (editor.isActive("heading", { level: 3 })) {
       return "heading-3";
     }
+    if (editor.isActive("heading", { level: 4 })) {
+      return "heading-4";
+    }
+    if (editor.isActive("heading", { level: 5 })) {
+      return "heading-5";
+    }
+    if (editor.isActive("heading", { level: 6 })) {
+      return "heading-6";
+    }
   } catch {
     return "paragraph";
   }

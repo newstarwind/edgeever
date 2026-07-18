@@ -209,6 +209,24 @@ textarea {
   margin: 1.2rem 0 0.6rem;
 }
 
+.ProseMirror h4 {
+  font-size: 1.05rem;
+  font-weight: 680;
+  margin: 1rem 0 0.5rem;
+}
+
+.ProseMirror h5 {
+  font-size: 0.95rem;
+  font-weight: 660;
+  margin: 0.85rem 0 0.4rem;
+}
+
+.ProseMirror h6 {
+  font-size: 0.875rem;
+  font-weight: 640;
+  margin: 0.75rem 0 0.35rem;
+}
+
 .ProseMirror p {
   line-height: var(--editor-body-line-height);
   margin: 0 0 var(--editor-paragraph-spacing);

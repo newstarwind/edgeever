@@ -175,6 +175,21 @@ export const EditorToolbar = ({
 
       if (value === "heading-3") {
         chain.setHeading({ level: 3 }).run();
+        return;
+      }
+
+      if (value === "heading-4") {
+        chain.setHeading({ level: 4 }).run();
+        return;
+      }
+
+      if (value === "heading-5") {
+        chain.setHeading({ level: 5 }).run();
+        return;
+      }
+
+      if (value === "heading-6") {
+        chain.setHeading({ level: 6 }).run();
       }
     });
   };
@@ -228,6 +243,9 @@ export const EditorToolbar = ({
               <SelectItem value="heading-1">{t("editorToolbar.heading1")}</SelectItem>
               <SelectItem value="heading-2">{t("editorToolbar.heading2")}</SelectItem>
               <SelectItem value="heading-3">{t("editorToolbar.heading3")}</SelectItem>
+              <SelectItem value="heading-4">{t("editorToolbar.heading4")}</SelectItem>
+              <SelectItem value="heading-5">{t("editorToolbar.heading5")}</SelectItem>
+              <SelectItem value="heading-6">{t("editorToolbar.heading6")}</SelectItem>
             </SelectContent>
           </Select>
 

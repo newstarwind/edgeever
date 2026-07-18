@@ -238,7 +238,7 @@ export const markdownToDoc = (markdown: string): TiptapDoc => {
       continue;
     }
 
-    const heading = /^(#{1,3})\s+(.+)$/.exec(block);
+    const heading = /^(#{1,6})\s+(.+)$/.exec(block);
     const image = /^!\[([^\]]*)\]\((\S+?)(?:\s+"([^"]+)")?\)$/.exec(block);
 
     if (heading) {
