@@ -163,9 +163,9 @@ body {
   color: #e2e8f0;
 }
 
-/* Markdown source textarea: dark editor, keep text light in dark mode */
+/* Markdown source textarea: match editor text brightness */
 :root.dark textarea.font-mono:not([class*="text-white"]) {
-  color: #f8fafc !important;
+  color: #e2e8f0 !important;
 }
 
 button,
@@ -693,7 +693,7 @@ textarea {
 }
 
 :root.dark .ProseMirror blockquote {
-  color: #f8fafc;
+  color: #e2e8f0;
   background: var(--brand-green-soft);
 }
 
@@ -701,11 +701,11 @@ textarea {
 :root.dark .ProseMirror pre {
   border-color: #166534;
   background: #13261a;
-  color: #f8fafc;
+  color: #e2e8f0;
 }
 
 :root.dark .markdown-content {
-  color: #f8fafc;
+  color: #e2e8f0;
 }
 
 :root.dark .markdown-content h1,
@@ -722,11 +722,11 @@ textarea {
 :root.dark .markdown-content pre {
   background-color: #13261a;
   border-color: #166534;
-  color: #f8fafc;
+  color: #e2e8f0;
 }
 
 :root.dark .markdown-content code {
   background-color: #13261a;
   border-color: #166534;
-  color: #f8fafc;
+  color: #e2e8f0;
 }
