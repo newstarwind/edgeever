@@ -160,12 +160,12 @@ body {
 }
 
 :root.dark .ProseMirror {
-  color: #f8fafc;
+  color: #e2e8f0;
 }
 
 /* Markdown source textarea: dark editor, keep text light in dark mode */
 :root.dark textarea.font-mono:not([class*="text-white"]) {
-  color: #f8fafc;
+  color: #f8fafc !important;
 }
 
 button,
