@@ -803,7 +803,7 @@ export const WorkspaceApp = ({
   const isPullRefreshingRef = useRef(false);
   const skipNextHomeRouteSyncRef = useRef(false);
 
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [mobileListActionsOpen, setMobileListActionsOpen] = useState(false);
   const [mobileMoveOpen, setMobileMoveOpen] = useState(false);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);

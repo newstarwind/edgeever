@@ -688,7 +688,7 @@ textarea {
 }
 
 :root.dark .ProseMirror blockquote {
-  color: #f1f5f9;
+  color: #f8fafc;
   background: var(--brand-green-soft);
 }
 
@@ -696,11 +696,11 @@ textarea {
 :root.dark .ProseMirror pre {
   border-color: #166534;
   background: #13261a;
-  color: #f1f5f9;
+  color: #f8fafc;
 }
 
 :root.dark .markdown-content {
-  color: #f1f5f9;
+  color: #f8fafc;
 }
 
 :root.dark .markdown-content h1,
@@ -717,11 +717,11 @@ textarea {
 :root.dark .markdown-content pre {
   background-color: #13261a;
   border-color: #166534;
-  color: #e2e8f0;
+  color: #f8fafc;
 }
 
 :root.dark .markdown-content code {
   background-color: #13261a;
   border-color: #166534;
-  color: #e2e8f0;
+  color: #f8fafc;
 }
