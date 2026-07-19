@@ -91,6 +91,13 @@ UI 功能应尽量复用 `shadcn/ui` 等现有 UI 组件。在实现其他功能
 - **修复**: 在 `apps/mobile/package.json` 的 devDependencies 中添加 `"@react-native-community/cli": "latest"`
 - **教训**: 在 CI 中使用 `npx react-native bundle` 需要显式安装 CLI 依赖
 
+### 2025-07-19：react-native bundle 需要 metro.config.js
+
+- **症状**: CI 中 bundle 步骤报 `No Metro config found in /home/runner/work/edgeever/edgeever/apps/mobile`
+- **原因**: Expo/RN 项目缺少 `metro.config.js`，`react-native bundle` 需要它来确定打包配置
+- **修复**: 创建 `apps/mobile/metro.config.js`，内容为标准 Expo 配置：`const { getDefaultConfig } = require("expo/metro-config"); const config = getDefaultConfig(__dirname); module.exports = config;`
+- **教训**: 在 CI 中显式执行 `npx react-native bundle` 时需要项目根目录有 metro.config.js
+
 ## 决策记录
 
 以下记录跨会话的重要决策，供后续 AI 会话快速恢复上下文。
