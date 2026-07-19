@@ -84,6 +84,13 @@ UI 功能应尽量复用 `shadcn/ui` 等现有 UI 组件。在实现其他功能
 
 - **教训**: CI 环境下 `expo prebuild` + `gradlew` 方式需要显式 bundle 步骤。如果用 `npx expo run:android` 则自动处理。当前工作流文件：`.github/workflows/mobile-build.yml`
 
+### 2025-07-19：react-native bundle 缺少 @react-native-community/cli
+
+- **症状**: CI 中 bundle 步骤报 `react-native depends on @react-native-community/cli`
+- **原因**: `react-native bundle` 命令需要 `@react-native-community/cli` 包
+- **修复**: 在 `apps/mobile/package.json` 的 devDependencies 中添加 `"@react-native-community/cli": "latest"`
+- **教训**: 在 CI 中使用 `npx react-native bundle` 需要显式安装 CLI 依赖
+
 ## 决策记录
 
 以下记录跨会话的重要决策，供后续 AI 会话快速恢复上下文。
