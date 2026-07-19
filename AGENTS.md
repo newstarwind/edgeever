@@ -56,6 +56,17 @@ UI 功能应尽量复用 `shadcn/ui` 等现有 UI 组件。在实现其他功能
 
 以下记录跨会话的重要决策，供后续 AI 会话快速恢复上下文。
 
+### 2025-07-18：Android 系统分享接入（expo-share-intent）
+
+- **功能**: 从浏览器、微信等 App 分享内容到 EdgeEver 笔记
+- **技术**: `expo-share-intent v8`，支持 text/url 分享
+- **核心文件**:
+  - `src/lib/share-receiver.ts` — 分享内容类型定义、持久化、Memo 构建
+  - `src/components/ShareManager.tsx` — ShareIntentProvider 封装 + OS 分享 intent 处理
+  - `src/components/ShareReceiveModal.tsx` — 保存界面（标题/笔记本/标签）
+- **流程**: 接收分享 → 已登录则弹出保存界面 → 未登录存 AsyncStorage → 登录后恢复
+- **限制**: 当前仅支持 text/url，不支持图片附件
+
 ### 2025-07-17：配置 pi MCP 扩展 + 表格渲染 + 侧栏折叠
 
 - **EdgeEver 实例**: `https://edgeever.davidqi.workers.dev`

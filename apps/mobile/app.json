@@ -19,7 +19,15 @@
     },
     "plugins": [
       "expo-router",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-share-intent",
+        {
+          "android": {
+            "intentFilters": ["text/*", "image/*"]
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

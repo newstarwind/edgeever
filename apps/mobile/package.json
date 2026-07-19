@@ -22,6 +22,8 @@
     "expo-constants": "~57.0.3",
     "expo-document-picker": "~57.0.0",
     "expo-image-manipulator": "~57.0.2",
+    "expo-linking": "~57.0.0",
+    "expo-share-intent": "^8.0.1",
     "expo-router": "latest",
     "expo-secure-store": "latest",
     "expo-status-bar": "latest",
