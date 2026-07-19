@@ -57,6 +57,18 @@ jobs:
         run: bunx expo prebuild --platform android --non-interactive --clean
         working-directory: apps/mobile
 
+      - name: Bundle JavaScript
+        run: |
+          mkdir -p android/app/src/main/assets
+          ENTRY_FILE=$(node -e "console.log(require.resolve('expo-router/entry'))")
+          npx react-native bundle \
+            --platform android \
+            --dev false \
+            --entry-file "$ENTRY_FILE" \
+            --bundle-output android/app/src/main/assets/index.android.bundle \
+            --assets-dest android/app/src/main/res/
+        working-directory: apps/mobile
+
       - name: Build debug APK
         run: ./gradlew assembleDebug
         working-directory: apps/mobile/android
