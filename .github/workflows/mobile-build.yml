@@ -54,8 +54,19 @@ jobs:
         run: bun run typecheck:mobile
 
       - name: Generate Android native project
-        run: bunx expo prebuild --platform android --non-interactive
+        run: bunx expo prebuild --platform android --non-interactive --clean
         working-directory: apps/mobile
+
+      - name: Bundle JavaScript
+        run: |
+          cd apps/mobile
+          mkdir -p android/app/src/main/assets
+          node node_modules/react-native/cli.js bundle \
+            --platform android \
+            --dev false \
+            --entry-file node_modules/expo-router/entry.js \
+            --bundle-output android/app/src/main/assets/index.android.bundle \
+            --assets-dest android/app/src/main/res/
 
       - name: Build debug APK
         run: ./gradlew assembleDebug
