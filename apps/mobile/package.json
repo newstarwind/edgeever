@@ -38,6 +38,7 @@
     "react-native-webview": "13.16.1"
   },
   "devDependencies": {
+    "@react-native-community/cli": "latest",
     "@types/react": "latest",
     "babel-preset-expo": "latest",
     "gluestack-ui": "latest",
