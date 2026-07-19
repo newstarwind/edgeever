@@ -60,11 +60,10 @@ jobs:
       - name: Bundle JavaScript
         run: |
           mkdir -p android/app/src/main/assets
-          ENTRY_FILE=$(node -e "console.log(require.resolve('expo-router/entry'))")
-          npx react-native bundle \
+          bunx react-native bundle \
             --platform android \
             --dev false \
-            --entry-file "$ENTRY_FILE" \
+            --entry-file node_modules/expo-router/entry.js \
             --bundle-output android/app/src/main/assets/index.android.bundle \
             --assets-dest android/app/src/main/res/
         working-directory: apps/mobile
