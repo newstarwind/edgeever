@@ -95,8 +95,8 @@ UI 功能应尽量复用 `shadcn/ui` 等现有 UI 组件。在实现其他功能
 
 - **症状**: CI 中 bundle 步骤报 `No Metro config found in /home/runner/work/edgeever/edgeever/apps/mobile`
 - **原因**: Expo/RN 项目缺少 `metro.config.js`，`react-native bundle` 需要它来确定打包配置
-- **修复**: 创建 `apps/mobile/metro.config.js`，内容为标准 Expo 配置：`const { getDefaultConfig } = require("expo/metro-config"); const config = getDefaultConfig(__dirname); module.exports = config;`
-- **教训**: 在 CI 中显式执行 `npx react-native bundle` 时需要项目根目录有 metro.config.js
+- **修复**: 创建 `apps/mobile/metro.config.cjs`（注意 `.cjs` 而非 `.js`，因为 `package.json` 中有 `"type": "module"`，`.js` 文件会被视为 ESM 导致 `require` 不可用）
+- **教训**: 在 CI 中显式执行 `npx react-native bundle` 时需要项目根目录有 metro.config，且必须用 `.cjs` 扩展名
 
 ## 决策记录
 
