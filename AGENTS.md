@@ -52,6 +52,38 @@ UI 功能应尽量复用 `shadcn/ui` 等现有 UI 组件。在实现其他功能
 
 为方便代码维护，当页面或功能模块出现复杂结构、重复布局或潜在复用场景时，应视情况封装为独立组件，保持页面入口聚焦于组合与数据传递。
 
+## 构建经验
+
+以下记录 Android APK 构建过程中遇到过的错误与修复，供后续 AI 会话遇到 CI 失败时快速定位。
+
+### 2025-07-19：expo install --check 版本不匹配
+
+- **症状**: CI 中 `expo install --check` 以非零退出码失败，构建终止
+- **原因**: `package.json` 中 expo 生态包的版本未与 SDK 57 完全对齐
+- **修复**: 在本地运行 `bunx expo install <包名>` 让 Expo 自动解析正确版本
+- **涉及包**: `expo-clipboard`, `expo-constants`, `expo-document-picker`, `expo-image-manipulator`, `expo-linking`, `react-native-screens`
+- **教训**: 添加新的 expo 包后，应运行 `expo install --check` 验证版本一致性
+
+### 2025-07-19：APK 缺少 JS bundle（Unable to load script）
+
+- **症状**: APK 安装后启动报 `Unable to load script. Make sure you're running Metro or that your bundle 'index.android.bundle' is packaged correctly for release.`
+- **原因**: `expo prebuild --clean` 生成原生项目后，直接 `./gradlew assembleDebug` 没有自动触发 Metro JS 打包，APK 中缺少 `index.android.bundle`
+- **修复**: 在 Gradle 编译前显式执行 JS bundle 步骤：
+
+  ```yaml
+  - name: Bundle JavaScript
+    run: |
+      mkdir -p android/app/src/main/assets
+      npx react-native bundle \
+        --platform android \
+        --dev false \
+        --entry-file node_modules/expo-router/entry.js \
+        --bundle-output android/app/src/main/assets/index.android.bundle \
+        --assets-dest android/app/src/main/res/
+  ```
+
+- **教训**: CI 环境下 `expo prebuild` + `gradlew` 方式需要显式 bundle 步骤。如果用 `npx expo run:android` 则自动处理。当前工作流文件：`.github/workflows/mobile-build.yml`
+
 ## 决策记录
 
 以下记录跨会话的重要决策，供后续 AI 会话快速恢复上下文。
