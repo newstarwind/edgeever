@@ -2699,7 +2699,8 @@ const RichEditorPane = ({
       <div
         className={cn(
           "edgeever-editor relative min-h-0 flex-1 bg-white",
-          useMobilePlainTextEditor ? "overflow-visible" : "overflow-y-auto"
+          useMobilePlainTextEditor ? "overflow-visible" : "overflow-y-auto",
+          editorFullscreen && !useMobilePlainTextEditor && "px-[10vw]"
         )}
       >
         {useMobilePlainTextEditor ? (
