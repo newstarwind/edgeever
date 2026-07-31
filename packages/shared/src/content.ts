@@ -117,7 +117,7 @@ const parseInlineMarkdown = (text: string): TiptapTextNode[] => {
     } else {
       // No match found, consume consecutive plain text as a single node
       // Markdown syntax characters: * _ ` [ ! ~
-      const plainTextMatch = remaining.match(/^[^*_`\[!~]+/);
+      const plainTextMatch = remaining.match(/^[^*_`[!~]+/);
       if (plainTextMatch) {
         nodes.push({ type: "text", text: plainTextMatch[0]! });
         remaining = remaining.slice(plainTextMatch[0].length);
@@ -224,6 +224,42 @@ export const markdownToDoc = (markdown: string): TiptapDoc => {
       continue;
     }
 
+    // ATX heading: recognized on its own line, otherwise a heading that is
+    // immediately followed by list items or plain text would be swallowed
+    // into a single paragraph block and the `#` markers would render literally.
+    const headingLine = /^(#{1,6})\s+(.+)$/.exec(lines[index]);
+    if (headingLine) {
+      content.push({
+        type: "heading",
+        attrs: { level: headingLine[1].length },
+        content: parseInlineMarkdown(headingLine[2]!),
+      });
+      index += 1;
+      continue;
+    }
+
+    // Image and horizontal rule are also first-line constructs: recognizing
+    // them here keeps a trailing caption/paragraph from breaking the match.
+    const imageLine = /^!\[([^\]]*)\]\((\S+?)(?:\s+"([^"]+)")?\)$/.exec(lines[index]);
+    if (imageLine) {
+      content.push({
+        type: "image",
+        attrs: {
+          src: imageLine[2],
+          alt: imageLine[1] || null,
+          title: imageLine[3] || null,
+        },
+      });
+      index += 1;
+      continue;
+    }
+
+    if (/^-{3,}$/.test(lines[index].trim())) {
+      content.push({ type: "horizontalRule" });
+      index += 1;
+      continue;
+    }
+
     const blockLines: string[] = [];
     while (index < lines.length && lines[index].trim()) {
       blockLines.push(lines[index]);
@@ -235,35 +271,6 @@ export const markdownToDoc = (markdown: string): TiptapDoc => {
     // Check if block is a Markdown table
     if (isTableBlock(blockLines)) {
       content.push(parseTable(blockLines));
-      continue;
-    }
-
-    const heading = /^(#{1,6})\s+(.+)$/.exec(block);
-    const image = /^!\[([^\]]*)\]\((\S+?)(?:\s+"([^"]+)")?\)$/.exec(block);
-
-    if (heading) {
-      content.push({
-        type: "heading",
-        attrs: { level: heading[1].length },
-        content: parseInlineMarkdown(heading[2]!),
-      });
-      continue;
-    }
-
-    if (image) {
-      content.push({
-        type: "image",
-        attrs: {
-          src: image[2],
-          alt: image[1] || null,
-          title: image[3] || null,
-        },
-      });
-      continue;
-    }
-
-    if (/^-{3,}$/.test(block)) {
-      content.push({ type: "horizontalRule" });
       continue;
     }
 
