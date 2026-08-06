@@ -489,6 +489,7 @@ type EditorPaneProps = {
   searchFocusToken: number;
   replaceFocusToken: number;
   selectionActionBar?: ReactNode;
+  onSaveHandlerReady?: (flushSave: () => Promise<boolean>) => void;
 };
 
 type RichEditorPaneProps = EditorPaneProps & {
@@ -1096,6 +1097,7 @@ const RichEditorPane = ({
   replaceFocusToken,
   selectionActionBar,
   onRequestMobileNativeEdit,
+  onSaveHandlerReady,
 }: RichEditorPaneProps) => {
   const queryClient = useQueryClient();
   const isSelectionMode = Boolean(selectionActionBar);
@@ -2002,6 +2004,29 @@ const RichEditorPane = ({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [saveMutation, saveState]);
+
+  // Ctrl+N 新建笔记前：先保存并关闭当前笔记（供 WorkspaceApp 的快捷键调用）
+  const flushSave = useCallback(async (): Promise<boolean> => {
+    const currentMemo = memoRef.current;
+    if (!currentMemo || currentMemo.isDeleted || saveState === "conflict") {
+      return true;
+    }
+    if (!hasUnsavedChangesRef.current || saveMutation.isPending) {
+      // 无未保存改动，或已有保存请求在进行中——不重复触发保存
+      return true;
+    }
+    try {
+      await saveMutation.mutateAsync();
+    } catch {
+      // 保存失败（如离线）不阻塞新建；草稿与同步队列会保护内容
+    }
+    return true;
+  }, [saveMutation, saveState]);
+
+  useEffect(() => {
+    onSaveHandlerReady?.(flushSave);
+    return () => onSaveHandlerReady?.(() => Promise.resolve(true));
+  }, [flushSave, onSaveHandlerReady]);
 
   const clearMobileEditorTimers = useCallback(() => {
     if (mobileDraftTimerRef.current !== null) {

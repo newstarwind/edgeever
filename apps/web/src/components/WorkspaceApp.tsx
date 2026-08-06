@@ -756,6 +756,7 @@ export const WorkspaceApp = ({
 }) => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const flushEditorSaveRef = useRef<() => Promise<boolean>>(async () => true);
   const location = useLocation();
   const navigate = useNavigate();
   const isInitialSettingsRoute = location.pathname === SETTINGS_PATH;
@@ -2236,7 +2237,11 @@ export const WorkspaceApp = ({
       }
 
       if (action === "createMemo" && canCreateMemo && !createMemoMutation.isPending) {
-        handleCreateMemo();
+        void (async () => {
+          // Ctrl+N：先保存并关闭当前笔记，再新建
+          await flushEditorSaveRef.current();
+          handleCreateMemo();
+        })();
       }
     };
 
@@ -2648,6 +2653,9 @@ export const WorkspaceApp = ({
                       await restoreMemoMutation.mutateAsync(memoId);
                     }}
                     onMobileDefaultEditConsumed={handleMobileDefaultEditConsumed}
+                    onSaveHandlerReady={(flushSave) => {
+                      flushEditorSaveRef.current = flushSave;
+                    }}
                   />
                 )}
               </Suspense>
