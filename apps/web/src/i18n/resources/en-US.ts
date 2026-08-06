@@ -226,6 +226,10 @@ export const enUS = {
         label: "Toggle Markdown/source",
         description: "Switch between Markdown source and rich text editing.",
       },
+      saveMemo: {
+        label: "Save note",
+        description: "Save the current note immediately (Ctrl+S / ⌘S).",
+      },
     },
   },
   options: {

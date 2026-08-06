@@ -1982,6 +1982,27 @@ const RichEditorPane = ({
     },
   });
 
+  // Ctrl+S / Cmd+S 保存
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        if (
+          memoRef.current &&
+          !memoRef.current.isDeleted &&
+          hasUnsavedChangesRef.current &&
+          !saveMutation.isPending &&
+          saveState !== "conflict"
+        ) {
+          saveMutation.mutate();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [saveMutation, saveState]);
+
   const clearMobileEditorTimers = useCallback(() => {
     if (mobileDraftTimerRef.current !== null) {
       window.clearTimeout(mobileDraftTimerRef.current);

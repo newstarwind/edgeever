@@ -226,6 +226,10 @@ export const zhCN = {
         label: "切换 Markdown/源码",
         description: "在 Markdown 源码与富文本编辑之间切换。",
       },
+      saveMemo: {
+        label: "保存笔记",
+        description: "立即保存当前笔记（Ctrl+S / ⌘S）。",
+      },
     },
   },
   options: {
