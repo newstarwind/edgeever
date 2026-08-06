@@ -1683,6 +1683,22 @@ const RichEditorPane = ({
       return;
     }
 
+    // 自动保存成功后，保存的 memo 会被写回查询缓存（onSaved -> cacheMemoDetail），
+    // 这只会改变 memo 对象的引用，内容并没有变。此时重新执行 hydration 会调用
+    // setContent，把光标重置到文档末尾，严重影响编辑体验。只要编辑器里已经是
+    // 完全相同的文档，就跳过重新 hydration。
+    if (
+      sameMemo &&
+      hydratedMemoIdRef.current === memo.id &&
+      !memo.isDeleted &&
+      isEditorReady(currentEditor)
+    ) {
+      const currentDocJson = JSON.stringify(currentEditor.getJSON());
+      if (currentDocJson === JSON.stringify(memo.contentJson)) {
+        return;
+      }
+    }
+
     void (async () => {
       let [draft, queuedUpdate, editSessionResponse] = memo.isDeleted
         ? [null, null, null]
