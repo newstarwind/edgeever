@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router";
 import { registerSW } from "virtual:pwa-register";
 import { App } from "./app/App";
+import { editorHasUnsavedChangesNow } from "./lib/editor-dirty";
 import "./i18n";
 import { emitPwaUpdateNotice, markPwaUpdateReloadPending } from "./lib/pwa-update-notice";
 import { initializeTheme, ThemeProvider } from "./components/ThemeProvider";
@@ -21,6 +22,11 @@ updateServiceWorker = registerSW({
   },
   onNeedReload() {
     markPwaUpdateReloadPending();
+    // 编辑笔记期间（有未保存改动）不自动刷新，待保存完成后立即刷新，
+    // 避免部署新版本时打断编辑。
+    if (editorHasUnsavedChangesNow()) {
+      return;
+    }
     window.location.reload();
   },
   onRegisteredSW(_swScriptUrl, registration) {

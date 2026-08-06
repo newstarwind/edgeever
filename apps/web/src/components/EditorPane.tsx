@@ -64,6 +64,8 @@ import { codeBlockLowlight } from "@/lib/code-block";
 import { compressImageForUpload } from "@/lib/image-compression";
 import { localDb, type MemoUpdateSyncPayload } from "@/lib/local-db";
 import { getMemoUpdateQueueId, isMemoUpdateAlreadyApplied, queueMemoUpdate, shouldQueueMemoSaveError } from "@/lib/sync-queue";
+import { setEditorHasUnsavedChanges } from "@/lib/editor-dirty";
+import { consumePwaUpdateReloadPending } from "@/lib/pwa-update-notice";
 import {
   getNotebookMoveOptions,
   DEFAULT_MEMO_TITLE,
@@ -1784,6 +1786,11 @@ const RichEditorPane = ({
   }, [editor, effectiveReadOnly, memo]);
 
   useEffect(() => {
+    setEditorHasUnsavedChanges(hasUnsavedChanges);
+    return () => setEditorHasUnsavedChanges(false);
+  }, [hasUnsavedChanges]);
+
+  useEffect(() => {
     if (!isEditorReady(editor) || !memo) {
       return;
     }
@@ -1928,6 +1935,11 @@ const RichEditorPane = ({
         hasUnsavedChangesRef.current = false;
         setHasUnsavedChanges(false);
         await localDb.drafts.delete(savedMemo.id);
+        // PWA 新版本等待中且本次已成功保存：立即刷新进入新版本。
+        if (consumePwaUpdateReloadPending()) {
+          window.location.reload();
+          return;
+        }
         setSaveState("saved");
         window.setTimeout(() => setSaveState("idle"), 1400);
         return;
