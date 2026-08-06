@@ -208,8 +208,10 @@ export const getShortcutActionOptions = (
 ];
 
 export const DEFAULT_SHORTCUT_SETTINGS: ShortcutSettings = {
-  createMemo: { key: "n", ctrlOrMeta: true, shift: false, alt: false },
-  createNotebook: { key: "n", ctrlOrMeta: true, shift: true, alt: false },
+  // Ctrl+N / Ctrl+Shift+N 是浏览器保留快捷键（新窗口/隐身窗口），网页无法拦截，
+  // 因此新建笔记/笔记本使用 Alt 组合键。
+  createMemo: { key: "n", ctrlOrMeta: false, shift: false, alt: true },
+  createNotebook: { key: "n", ctrlOrMeta: false, shift: true, alt: true },
   focusSearch: { key: "f", ctrlOrMeta: true, shift: false, alt: false },
   focusReplace: { key: "h", ctrlOrMeta: true, shift: false, alt: false },
 };
@@ -346,15 +348,32 @@ export const readShortcutSettingsPreference = (): ShortcutSettings => {
     }
 
     const parsedValue = JSON.parse(rawValue) as Partial<ShortcutSettings>;
-    return SHORTCUT_ACTION_VALUES.reduce<ShortcutSettings>(
-      (settings, action) => ({
-        ...settings,
+    const settings = SHORTCUT_ACTION_VALUES.reduce<ShortcutSettings>(
+      (current, action) => ({
+        ...current,
         [action]: isShortcutBinding(parsedValue[action])
           ? { ...parsedValue[action], key: normalizeShortcutKey(parsedValue[action].key) }
           : DEFAULT_SHORTCUT_SETTINGS[action],
       }),
       { ...DEFAULT_SHORTCUT_SETTINGS }
     );
+
+    // 迁移：旧默认值 Ctrl+N / Ctrl+Shift+N 是浏览器保留快捷键（新窗口/隐身窗口），
+    // 网页无法拦截。若存储中仍是这些绑定，替换为新的安全默认值（Alt+N / Alt+Shift+N）。
+    if (
+      isShortcutBinding(parsedValue.createMemo) &&
+      shortcutBindingsEqual(parsedValue.createMemo, { key: "n", ctrlOrMeta: true, shift: false, alt: false })
+    ) {
+      settings.createMemo = DEFAULT_SHORTCUT_SETTINGS.createMemo;
+    }
+    if (
+      isShortcutBinding(parsedValue.createNotebook) &&
+      shortcutBindingsEqual(parsedValue.createNotebook, { key: "n", ctrlOrMeta: true, shift: true, alt: false })
+    ) {
+      settings.createNotebook = DEFAULT_SHORTCUT_SETTINGS.createNotebook;
+    }
+
+    return settings;
   } catch {
     return DEFAULT_SHORTCUT_SETTINGS;
   }
